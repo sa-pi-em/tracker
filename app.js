@@ -378,12 +378,25 @@
   }
   function renderTimerPanel() {
     const active=!!state.timer;
-    return `<section class="timer-panel"><div class="timer-top"><h2>Focus timer</h2><span class="timer-state">${active?'SESSION IN PROGRESS':'READY WHEN YOU ARE'}</span></div><div class="timer-face" id="timer-face">${active?timerText():'00:00:00'}</div><div class="timer-actions">${active?`<button class="btn btn-primary" data-stop-timer>■ Finish session</button>`:`<button class="btn btn-primary" data-start-timer>▶ Start studying</button>`}<button class="btn btn-secondary" data-go="wheel">Pick a topic ↗</button></div><div class="timer-meta">${active?`Tracking ${esc(window.SYLLABI[state.timer.course]?.short||'study')} since ${prettyDate(new Date(state.timer.startedAt),{hour:'numeric',minute:'2-digit'})}`:'Timer keeps running if you switch pages or refresh.'}</div></section>`;
+    const paused=active&&Number.isFinite(state.timer.pausedAt);
+    const controls=active?`${paused?'<button class="btn btn-primary" data-resume-timer>▶ Resume</button>':'<button class="btn btn-primary" data-pause-timer>Ⅱ Pause</button>'}<button class="btn btn-secondary" data-stop-timer>■ Finish session</button>`:'<button class="btn btn-primary" data-start-timer>▶ Start studying</button>';
+    const timerMeta=active?(paused?`Paused · ${esc(window.SYLLABI[state.timer.course]?.short||'study')} · started ${prettyDate(new Date(state.timer.startedAt),{hour:'numeric',minute:'2-digit'})}`:`Tracking ${esc(window.SYLLABI[state.timer.course]?.short||'study')} since ${prettyDate(new Date(state.timer.startedAt),{hour:'numeric',minute:'2-digit'})}`):'Timer keeps running if you switch pages or refresh.';
+    return `<section class="timer-panel"><div class="timer-top"><h2>Focus timer</h2><span class="timer-state">${active?(paused?'SESSION PAUSED':'SESSION IN PROGRESS'):'READY WHEN YOU ARE'}</span></div><div class="timer-face" id="timer-face">${active?timerText():'00:00:00'}</div><div class="timer-actions">${controls}<button class="btn btn-secondary" data-go="wheel">Pick a topic ↗</button></div><div class="timer-meta">${timerMeta}</div></section>`;
   }
   function timerText() {
     if (!state.timer) return '00:00:00';
-    const sec=Math.max(0,Math.floor((Date.now()-state.timer.startedAt)/1000));
+    const end=Number.isFinite(state.timer.pausedAt)?state.timer.pausedAt:Date.now();
+    const sec=Math.max(0,Math.floor((end-state.timer.startedAt-(Number(state.timer.pausedMs)||0))/1000));
     return [Math.floor(sec/3600),Math.floor(sec%3600/60),sec%60].map(n=>String(n).padStart(2,'0')).join(':');
+  }
+  function pauseTimer() {
+    if(!state.timer||Number.isFinite(state.timer.pausedAt))return;
+    state.timer.pausedAt=Date.now();saveState();render();toast('Timer paused.');
+  }
+  function resumeTimer() {
+    if(!state.timer||!Number.isFinite(state.timer.pausedAt))return;
+    state.timer.pausedMs=(Number(state.timer.pausedMs)||0)+(Date.now()-state.timer.pausedAt);
+    delete state.timer.pausedAt;saveState();render();toast('Timer resumed.');
   }
   function manualSessionForm() {
     return `<form class="session-form" id="session-form"><div class="form-row"><label><span class="field-label">EXAM TRACK</span><select class="select-control full" name="course"><option value="gate" ${activeCourse==='gate'?'selected':''}>GATE EC</option><option value="ese" ${activeCourse==='ese'?'selected':''}>UPSC ESE E&T</option><option value="both">Mixed / General</option></select></label><label><span class="field-label">DATE</span><input class="input" type="date" name="date" value="${localKey(new Date())}" required></label></div><div class="hours-fields"><label><span class="field-label">HOURS STUDIED</span><input class="input" type="number" min="0.1" max="24" step="0.1" name="hours" placeholder="e.g. 1.5" required></label><label><span class="field-label">WHAT DID YOU STUDY?</span><input class="input" name="note" maxlength="90" placeholder="Optional note"></label></div><button class="btn btn-primary" type="submit">＋ Add study time</button></form>`;
@@ -546,7 +559,9 @@
     const filter=e.target.closest('[data-filter]');if(filter){syllabusFilter=filter.dataset.filter;document.querySelectorAll('#syllabus-filters button').forEach(b=>b.classList.toggle('active',b===filter));applySyllabusFilters();return;}
     if(e.target.closest('[data-export]')){exportBackup();return;}
     if(e.target.closest('[data-import]')){document.getElementById('backup-file')?.click();return;}
-    if(e.target.closest('[data-start-timer]')){state.timer={startedAt:Date.now(),course:activeCourse};saveState();render();return;}
+    if(e.target.closest('[data-start-timer]')){state.timer={startedAt:Date.now(),course:activeCourse,pausedMs:0};saveState();render();return;}
+    if(e.target.closest('[data-pause-timer]')){pauseTimer();return;}
+    if(e.target.closest('[data-resume-timer]')){resumeTimer();return;}
     if(e.target.closest('[data-stop-timer]')){finishTimer();return;}
     if(e.target.closest('#spin-wheel')){spinWheel();return;}
     if(e.target.closest('#add-syllabus-topic')){const value=document.getElementById('syllabus-topic-select')?.value;if(!value){toast('Choose a syllabus topic first.');return;}const [courseId,chapterId,index]=value.split(':');const label=window.SYLLABI[courseId].chapters.find(c=>c.id===chapterId).topics[Number(index)];addWheelTopic(label);return;}
@@ -571,7 +586,7 @@
   });
   function finishTimer() {
     if(!state.timer)return;
-    const timer=state.timer;const seconds=Math.max(0,Math.floor((Date.now()-timer.startedAt)/1000));
+    const timer=state.timer;const end=Number.isFinite(timer.pausedAt)?timer.pausedAt:Date.now();const seconds=Math.max(0,Math.floor((end-timer.startedAt-(Number(timer.pausedMs)||0))/1000));
     if(seconds>=60){state.sessions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,7)}`,course:timer.course,date:localKey(new Date(timer.startedAt)),minutes:Math.max(1,Math.round(seconds/60)),note:'Focus timer',createdAt:Date.now()});}
     state.timer=null;saveState();toast(seconds>=60?'Focus session saved to your study log.':'Short session ended; no time was logged.');render();
   }
