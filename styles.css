@@ -43,3 +43,9 @@
 .cloud-choice-backups .btn{flex:1;font-size:10px;padding:8px}
 .cloud-choice-cancel{justify-self:center;border:0;background:transparent;color:#7b8d89;padding:5px;font-size:10px;text-decoration:underline;text-underline-offset:2px}
 .cloud-choice-cancel:hover{color:#a45f40}
+.password-field{position:relative;display:block}
+.password-field .input{padding-right:43px}
+.password-toggle{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:#738783;padding:6px}
+.password-toggle:hover{background:#f0efe8;color:#315f5b}
+.password-toggle:focus-visible{outline:2px solid #6da496;outline-offset:1px}
+.password-toggle svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}

@@ -667,6 +667,12 @@
   document.querySelectorAll('[data-cloud-choice]').forEach(button=>button.addEventListener('click',()=>resolveCloudChoice(button.dataset.cloudChoice)));
   document.querySelector('[data-export-browser-choice]').addEventListener('click',()=>{if(pendingCloudChoice)exportBackup(pendingCloudChoice.local,'browser-copy');});
   document.querySelector('[data-export-account-choice]').addEventListener('click',()=>{if(pendingCloudChoice?.remoteExists)exportBackup(pendingCloudChoice.remote,'account-copy');});
+  document.getElementById('password-visibility-toggle').addEventListener('click',()=>{
+    const input=document.getElementById('cloud-password');const visible=input.type==='password';
+    input.type=visible?'text':'password';
+    const button=document.getElementById('password-visibility-toggle');button.setAttribute('aria-label',visible?'Hide password':'Show password');button.setAttribute('aria-pressed',String(visible));
+    document.getElementById('password-eye-open').hidden=visible;document.getElementById('password-eye-closed').hidden=!visible;
+  });
   document.getElementById('cloud-auth-form').addEventListener('submit',e=>{e.preventDefault();submitCloudAuth(e.currentTarget);});
   document.getElementById('cloud-sync-now').addEventListener('click',manualCloudSync);
   document.getElementById('cloud-signout').addEventListener('click',signOutCloud);
