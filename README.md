@@ -12,7 +12,7 @@ Open `index.html` in a modern browser. The site has no build step or external ru
 - Progress percentages are calculated for each level across the selected exam and for each chapter.
 - The dashboard counts down to ESE Prelims and GATE 2027. ESE defaults to 31 January; GATE defaults to the exam-window opening on 6 February, and the dates can be adjusted in the dashboard.
 - Checkmarks, study sessions, the running timer and topic-wheel entries save in this browser on this device.
-- Supabase account sync is configured for this project; finish the GitHub Pages redirect and publish these updated files to enable it on the hosted site. See [`BACKEND_SETUP.md`](BACKEND_SETUP.md).
+- Supabase account sync is configured and deployed. Set the Auth email redirect before creating an account; see [`BACKEND_SETUP.md`](BACKEND_SETUP.md).
 - Use **Export backup** on the syllabus page to download a JSON backup. **Import** restores a backup in this browser.
 - Study time can be recorded with the live timer or entered manually by date, exam and duration.
 - The topic roulette starts with a small mixed pool; add custom topics or select topics from either syllabus.
