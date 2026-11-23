@@ -69,19 +69,32 @@
   }
   function updateCloudModal() {
     const choosingData=!!pendingCloudChoice;
+    const switchingAccounts=choosingData&&pendingCloudChoice.switchingAccounts;
+    const emptyTarget=switchingAccounts&&!pendingCloudChoice.remoteHasData;
     document.getElementById('cloud-setup-panel').hidden=cloudConfigured();
     document.getElementById('cloud-auth-panel').hidden=!cloudConfigured()||!!cloudUser||choosingData;
     document.getElementById('cloud-account-panel').hidden=!cloudUser||choosingData;
     document.getElementById('cloud-data-choice-panel').hidden=!choosingData||confirmingCloudReplace;
     document.getElementById('cloud-replace-confirm-panel').hidden=!choosingData||!confirmingCloudReplace;
-    document.getElementById('cloud-dialog-title').textContent=choosingData?'Choose which study data to keep.':'Your progress, wherever you study.';
-    document.querySelector('.cloud-intro').textContent=choosingData?'Saved tracker data exists in this browser and in your account. Choose how to continue.':'Sign in to sync this tracker across your devices. Your current browser data stays saved locally too.';
+    document.getElementById('cloud-dialog-title').textContent=choosingData?(switchingAccounts?'Switch tracker account?':'Choose which study data to keep.'):'Your progress, wherever you study.';
+    document.querySelector('.cloud-intro').textContent=choosingData?(switchingAccounts?`This browser is linked to a different account. Choose how to use its saved copy with ${cloudUser?.email||'the account you just signed into'}.`:'Saved tracker data exists in this browser and in your account. Choose how to continue.'):'Sign in to sync this tracker across your devices. Your current browser data stays saved locally too.';
+    if(choosingData){
+      document.getElementById('cloud-choice-lead').textContent=emptyTarget?'This browser has saved data, but the account you signed into has no study data yet. Choose whether to start that account empty or copy this browser’s data into it.':switchingAccounts?'This browser’s tracker data belongs to a different account. Choose what to keep in the account you just signed into.':'Both copies contain saved tracker data. Choose how you want to continue.';
+      document.getElementById('cloud-choice-note').textContent=emptyTarget?'The previous account’s cloud data stays unchanged. Download the browser copy below before starting this account empty if you may need it later.':switchingAccounts?'Merge or replace copies this browser’s data into the new account. The previous account’s cloud record stays unchanged. “Use account data” replaces this browser’s copy.':'Merge keeps completed checkmarks from either copy, combines sessions and wheel topics, and uses the account’s exam dates. “Use account data” replaces this browser’s tracker copy.';
+      document.getElementById('cloud-replace-note').textContent=emptyTarget?'This will copy this browser’s tracker data into the account you just signed into. That account has no saved study data yet; the previous account’s cloud record stays unchanged.':switchingAccounts?'This overwrites the account you just signed into with this browser’s copy. The previous account’s cloud data stays unchanged.':'This will overwrite the signed-in account’s tracker data with this browser’s copy, and cannot be undone in the tracker. Choose “Merge both” to keep data from both copies.';
+      document.getElementById('cloud-choice-merge').hidden=emptyTarget;
+      document.getElementById('cloud-choice-account').textContent=emptyTarget?'Start with empty account':'Use account data';
+      document.getElementById('cloud-choice-replace').textContent=emptyTarget?'Copy browser data into account':'Replace account data with this browser';
+      document.getElementById('cloud-replace-confirm-heading').textContent=emptyTarget?'Copy browser data?':'Replace the account copy?';
+      document.getElementById('cloud-choice-confirm-replace').textContent=emptyTarget?'Confirm and copy':'Confirm replacement';
+    }
+    document.getElementById('export-account-choice').hidden=!choosingData||!pendingCloudChoice.remoteExists;
     if(cloudUser)document.getElementById('cloud-account-email').textContent=cloudUser.email||'Signed-in account';
     setCloudMessage('');
   }
   function openCloudModal() {
     updateCloudModal();document.getElementById('cloud-modal').hidden=false;
-    const focus=document.querySelector('#cloud-data-choice-panel:not([hidden]) [data-cloud-choice], #cloud-replace-confirm-panel:not([hidden]) [data-cloud-choice], #cloud-auth-panel:not([hidden]) input[name="email"]')||document.getElementById('cloud-close');focus.focus();
+    const focus=document.querySelector('#cloud-data-choice-panel:not([hidden]) [data-cloud-choice]:not([hidden]), #cloud-replace-confirm-panel:not([hidden]) [data-cloud-choice]:not([hidden]), #cloud-auth-panel:not([hidden]) input[name="email"]')||document.getElementById('cloud-close');focus.focus();
   }
   function closeCloudModal() { document.getElementById('cloud-modal').hidden=true; }
   async function responseData(response) {
@@ -125,6 +138,12 @@
   }
   function hasLocalStudyData() { return hasStudyData(state); }
   function copyStudyData(source) { return JSON.parse(JSON.stringify(cloudSnapshot(source))); }
+  function emptyStudyData() { return {progress:{},sessions:[],timer:null,wheelTopics:DEFAULT_WHEEL.slice(),examDates:{...DEFAULT_EXAM_DATES}}; }
+  function requestCloudDataChoice(remote, switchingAccounts=false, remoteExists=true) {
+    pendingCloudChoice={local:copyStudyData(state),remote:copyStudyData(remote),userId:cloudUser.id,switchingAccounts,remoteExists,remoteHasData:hasStudyData(remote)};
+    confirmingCloudReplace=false;setCloudStatus('Choose data','');updateCloudModal();document.getElementById('cloud-modal').hidden=false;
+    document.querySelector(pendingCloudChoice.remoteHasData?'#cloud-data-choice-panel [data-cloud-choice="merge"]':'#cloud-data-choice-panel [data-cloud-choice="account"]')?.focus();return false;
+  }
   function mergeStudyData(local, remote) {
     const progress={...(local.progress||{}),...(remote.progress||{})};
     for(const [key,remoteBits] of Object.entries(remote.progress||{})){
@@ -173,22 +192,22 @@
     const path=`/rest/v1/study_data?select=data,updated_at&user_id=eq.${encodeURIComponent(cloudUser.id)}&limit=1`;
     const rows=await cloudRequest(path);
     if(syncVersion!==cloudSaveVersion)return true;
-    if(state.cloudUserId&&state.cloudUserId!==cloudUser.id)throw new Error('This browser is linked to a different account. Export your local backup before switching accounts.');
+    const switchingAccounts=!!state.cloudUserId&&state.cloudUserId!==cloudUser.id;
     cloudSyncReadyUserId=cloudUser.id;
     const remote=Array.isArray(rows)&&rows.length?rows[0].data:null;
     if(!remote){
+      if(switchingAccounts&&hasLocalStudyData())return requestCloudDataChoice(emptyStudyData(),true,false);
       applyCloudSnapshot(cloudSnapshot(),cloudUser.id,true);
       await uploadCloudSnapshot(cloudSaveVersion);
       render();return true;
     }
+    if(switchingAccounts&&hasLocalStudyData())return requestCloudDataChoice(remote,true,true);
     if(state.cloudUserId===cloudUser.id&&state.cloudDirty){
       applyCloudSnapshot(cloudSnapshot(),cloudUser.id,true);
       await uploadCloudSnapshot(cloudSaveVersion);
     }else if(hasLocalStudyData()&&state.cloudUserId!==cloudUser.id){
       if(hasStudyData(remote)){
-        pendingCloudChoice={local:copyStudyData(state),remote:copyStudyData(remote),userId:cloudUser.id};
-        confirmingCloudReplace=false;setCloudStatus('Choose data','');updateCloudModal();document.getElementById('cloud-modal').hidden=false;
-        document.querySelector('#cloud-data-choice-panel [data-cloud-choice="merge"]')?.focus();return false;
+        return requestCloudDataChoice(remote);
       }
       applyCloudSnapshot(cloudSnapshot(),cloudUser.id,true);
       await uploadCloudSnapshot(cloudSaveVersion);
@@ -207,10 +226,15 @@
     if(choice==='cancel-replace'){
       confirmingCloudReplace=false;updateCloudModal();document.querySelector('#cloud-data-choice-panel [data-cloud-choice="replace"]')?.focus();return;
     }
+    if(choice==='cancel-switch'){
+      pendingCloudChoice=null;confirmingCloudReplace=false;await signOutCloud();closeCloudModal();toast('Switch cancelled. This browser copy is unchanged.');return;
+    }
     const pending=pendingCloudChoice;
     try{
       if(choice==='account'){
-        applyCloudSnapshot(pending.remote,cloudUser.id,false);setCloudStatus('Cloud synced','connected');render();
+        applyCloudSnapshot(pending.remote,cloudUser.id,false);
+        setCloudStatus(pending.remoteExists?'Cloud synced':'Cloud connected','connected');
+        render();
       }else if(choice==='merge'){
         applyCloudSnapshot(mergeStudyData(pending.local,pending.remote),cloudUser.id,true);await uploadCloudSnapshot(cloudSaveVersion);render();
       }else if(choice==='confirm-replace'){
@@ -255,8 +279,8 @@
         setAuthMode('signin');setCloudMessage('Account created. Check your email to confirm, then sign in here.');return;
       }
       const user=data.user;
-      if(state.cloudUserId&&user?.id&&state.cloudUserId!==user.id){setCloudMessage('This browser has data linked to another account. Sign in to that account, or export a backup before switching.',true);return;}
       cloudAuth={...data,expiresAt:Date.now()+Number(data.expires_in||3600)*1000};cloudUser=user;storeCloudAuth();
+      form.reset();
       updateCloudModal();setCloudStatus('Cloud connected','connected');setCloudMessage('Signed in. Syncing your study data…');
       const synced=await synchronizeCloud();if(synced){closeCloudModal();toast('Cloud sync is connected.');}
     }catch(error){setCloudMessage(error.message||'Sign-in failed. Please try again.',true);}
@@ -552,9 +576,9 @@
       state.sessions.splice(Math.min(index,state.sessions.length),0,session);saveState();render();toast('Study session restored.');
     });
   }
-  function exportBackup() {
-    const blob=new Blob([JSON.stringify({app:'Fieldnote Study Control Room',version:1,exportedAt:new Date().toISOString(),state},null,2)],{type:'application/json'});
-    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`fieldnote-study-backup-${localKey(new Date())}.json`;a.click();URL.revokeObjectURL(url);toast('Backup downloaded. Keep it somewhere safe.');
+  function exportBackup(snapshot=state,label='') {
+    const blob=new Blob([JSON.stringify({app:'Fieldnote Study Control Room',version:1,exportedAt:new Date().toISOString(),state:snapshot},null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`fieldnote-study-backup${label?`-${label}`:''}-${localKey(new Date())}.json`;a.click();URL.revokeObjectURL(url);toast('Backup downloaded. Keep it somewhere safe.');
   }
   function importBackup(file) {
     if(!file)return;
@@ -641,6 +665,8 @@
   document.querySelectorAll('[data-close-cloud]').forEach(el=>el.addEventListener('click',closeCloudModal));
   document.querySelectorAll('[data-cloud-mode]').forEach(button=>button.addEventListener('click',()=>setAuthMode(button.dataset.cloudMode)));
   document.querySelectorAll('[data-cloud-choice]').forEach(button=>button.addEventListener('click',()=>resolveCloudChoice(button.dataset.cloudChoice)));
+  document.querySelector('[data-export-browser-choice]').addEventListener('click',()=>{if(pendingCloudChoice)exportBackup(pendingCloudChoice.local,'browser-copy');});
+  document.querySelector('[data-export-account-choice]').addEventListener('click',()=>{if(pendingCloudChoice?.remoteExists)exportBackup(pendingCloudChoice.remote,'account-copy');});
   document.getElementById('cloud-auth-form').addEventListener('submit',e=>{e.preventDefault();submitCloudAuth(e.currentTarget);});
   document.getElementById('cloud-sync-now').addEventListener('click',manualCloudSync);
   document.getElementById('cloud-signout').addEventListener('click',signOutCloud);

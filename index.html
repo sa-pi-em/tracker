@@ -65,18 +65,20 @@
         <div class="cloud-account-actions"><button class="btn btn-primary" id="cloud-sync-now" type="button">↻ Sync now</button><button class="btn btn-secondary" id="cloud-signout" type="button">Sign out</button></div>
       </div>
       <div class="cloud-data-choice" id="cloud-data-choice-panel" hidden>
-        <p class="cloud-choice-lead">Both copies contain saved tracker data. Choose how you want to continue.</p>
+        <p class="cloud-choice-lead" id="cloud-choice-lead">Both copies contain saved tracker data. Choose how you want to continue.</p>
         <div class="cloud-choice-actions">
-          <button class="btn btn-primary" type="button" data-cloud-choice="merge">Merge both <span>(recommended)</span></button>
-          <button class="btn btn-secondary" type="button" data-cloud-choice="account">Use account data</button>
-          <button class="btn btn-secondary" type="button" data-cloud-choice="replace">Replace account data with this browser</button>
+          <button class="btn btn-primary" id="cloud-choice-merge" type="button" data-cloud-choice="merge">Merge both <span>(recommended)</span></button>
+          <button class="btn btn-secondary" id="cloud-choice-account" type="button" data-cloud-choice="account">Use account data</button>
+          <button class="btn btn-secondary" id="cloud-choice-replace" type="button" data-cloud-choice="replace">Replace account data with this browser</button>
         </div>
-        <p class="cloud-choice-note">Merge keeps completed checkmarks from either copy, combines sessions and wheel topics, and uses the account’s exam dates. “Use account data” replaces this browser’s tracker copy.</p>
+        <p class="cloud-choice-note" id="cloud-choice-note">Merge keeps completed checkmarks from either copy, combines sessions and wheel topics, and uses the account’s exam dates. “Use account data” replaces this browser’s tracker copy.</p>
+        <div class="cloud-choice-backups"><button class="btn btn-secondary" type="button" data-export-browser-choice>⇩ Download browser copy</button><button class="btn btn-secondary" type="button" id="export-account-choice" data-export-account-choice hidden>⇩ Download account copy</button></div>
+        <button class="cloud-choice-cancel" type="button" data-cloud-choice="cancel-switch">Cancel and keep this browser copy</button>
       </div>
       <div class="cloud-data-choice" id="cloud-replace-confirm-panel" hidden>
-        <h3>Replace the account copy?</h3>
-        <p class="cloud-choice-note">This will overwrite the signed-in account’s tracker data with this browser’s copy, and cannot be undone in the tracker. Choose “Merge both” to keep data from both copies.</p>
-        <div class="cloud-choice-actions"><button class="btn btn-primary" type="button" data-cloud-choice="confirm-replace">Confirm replacement</button><button class="btn btn-secondary" type="button" data-cloud-choice="cancel-replace">Go back</button></div>
+        <h3 id="cloud-replace-confirm-heading">Replace the account copy?</h3>
+        <p class="cloud-choice-note" id="cloud-replace-note">This will overwrite the signed-in account’s tracker data with this browser’s copy, and cannot be undone in the tracker. Choose “Merge both” to keep data from both copies.</p>
+        <div class="cloud-choice-actions"><button class="btn btn-primary" id="cloud-choice-confirm-replace" type="button" data-cloud-choice="confirm-replace">Confirm replacement</button><button class="btn btn-secondary" type="button" data-cloud-choice="cancel-replace">Go back</button></div>
       </div>
       <p class="cloud-message" id="cloud-message" role="status" aria-live="polite"></p>
       <div class="cloud-modal-foot">Database access is restricted to your signed-in account.</div>
