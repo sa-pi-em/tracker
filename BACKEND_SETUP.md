@@ -8,10 +8,9 @@ The app remains a static GitHub Pages site. Supabase adds optional email/passwor
 - `supabase/schema.sql` applied successfully. The `study_data` table has row-level security policies that restrict each row to its signed-in owner.
 - `backend-config.js` contains this project's URL and public publishable key. It must never contain a service-role or secret key.
 
-## Finish setup
+## Use cloud sync
 
-1. In Supabase, open **Authentication → URL Configuration**. Set **Site URL** to `https://sa-pi-em.github.io/tracker/` and add that exact URL to the allowed redirect URLs. The current Site URL is `http://localhost:3000`, so account-confirmation emails need this change before signup.
-2. Open the [live tracker](https://sa-pi-em.github.io/tracker/), choose **Connect**, create an account, confirm the email, and sign in.
+The Supabase Site URL and allowed redirect are set to `https://sa-pi-em.github.io/tracker/`. Open the [live tracker](https://sa-pi-em.github.io/tracker/), choose **Connect**, create an account, confirm the email, and sign in.
 
 ## Existing progress
 
