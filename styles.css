@@ -17,5 +17,16 @@
 @media(max-width:420px){.breadcrumb span{display:none}.quick-grid{grid-template-columns:1fr 1fr}.summary-caption{font-size:9px}.page-head h1{font-size:32px}.head-actions{flex-wrap:wrap}.section-switcher{width:100%;justify-content:space-between}.section-switcher button{padding:7px 8px}.chapter-name h3{font-size:11px}.topic-checks{max-width:190px}.hours-fields,.form-row{grid-template-columns:1fr}.timer-panel{padding:20px 14px}.timer-face{font-size:38px}.session-row{grid-template-columns:38px 1fr auto}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
 @media(max-width:760px){.countdown-grid{grid-template-columns:1fr}.countdown-settings form{grid-template-columns:1fr}.countdown-card{min-height:158px}}
+
+.session-row{grid-template-columns:45px minmax(0,1fr) auto auto}
+.session-delete,.session-view-toggle{border:1px solid #e2e2d8;border-radius:6px;background:#fffefa;color:#8c6857;padding:6px 8px;font:9px var(--mono);cursor:pointer;white-space:nowrap}
+.session-delete:hover,.session-view-toggle:hover{border-color:#cc9b7e;background:#fbf5ee;color:#9b5738}
+.session-delete:focus-visible,.session-view-toggle:focus-visible,.toast-action:focus-visible{outline:2px solid #6da496;outline-offset:2px}
+.session-view-toggle{align-self:center;color:#426f69}
+.toast.show{pointer-events:auto}
+.toast-action{margin-left:9px;border:0;border-radius:5px;background:#e8b18b;color:#183840;padding:5px 8px;font:600 10px var(--mono);cursor:pointer}
+.toast-action:hover{background:#f0c39f}
+@media(max-width:760px){.session-row{grid-template-columns:38px minmax(0,1fr) auto auto;gap:7px}}
+@media(max-width:420px){.session-row{grid-template-columns:34px minmax(0,1fr) auto auto;gap:5px}.session-delete{padding:5px 6px;font-size:8px}}
 @media(max-width:760px){.topbar-right{gap:8px}.cloud-trigger{padding:7px 8px}.cloud-modal{padding:10px}.cloud-dialog{padding:25px 20px}}
 @media(max-width:420px){.cloud-trigger{gap:5px;font-size:8px}.cloud-trigger b{font-size:8px}.profile-chip{display:none}}

@@ -22,6 +22,7 @@
   let activePage = 'overview';
   let activeCourse = 'gate';
   let syllabusFilter = 'All sections';
+  let showAllSessions = false;
   let wheelRotation = 0;
   let spinLocked = false;
   let toastTimer;
@@ -392,15 +393,17 @@
     return days.map(d=>`<div class="study-day"><div class="study-day-head"><span>${d.key===localKey(new Date())?'Today':prettyDate(d.date,{weekday:'long',month:'short',day:'numeric'})}</span><b>${fmtHours(d.minutes)}</b></div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,d.minutes/max*100)}%"></div></div></div>`).join('');
   }
   function renderSessions() {
-    const records=state.sessions.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0)).slice(0,12);
+    const records=state.sessions.map((session,index)=>({session,index})).sort((a,b)=>b.session.date.localeCompare(a.session.date)||(b.session.createdAt||0)-(a.session.createdAt||0));
     if (!records.length) return '<div class="empty-state">Your first session can start with the timer or a manual entry.</div>';
-    return records.map(s=>`<div class="session-row"><span class="session-date">${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}</span><span><span class="session-course">${esc(window.SYLLABI[s.course]?.short||'Mixed')} · ${esc(s.note||'Study session')}</span></span><span class="session-duration">${fmtHours(s.minutes)}</span></div>`).join('');
+    const visible=showAllSessions?records:records.slice(0,12);
+    return visible.map(({session:s,index})=>`<div class="session-row"><span class="session-date">${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}</span><span><span class="session-course">${esc(window.SYLLABI[s.course]?.short||'Mixed')} · ${esc(s.note||'Study session')}</span></span><span class="session-duration">${fmtHours(s.minutes)}</span><button class="session-delete" type="button" data-delete-session="${index}" aria-label="Delete ${esc(s.note||'study session')} from ${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}" title="Delete session">Delete</button></div>`).join('');
   }
   function renderHours() {
     const today=minutesFor(localKey(new Date()));
+    const sessionsToggle=state.sessions.length>12||showAllSessions?`<button class="session-view-toggle" type="button" data-toggle-sessions aria-expanded="${showAllSessions}">${showAllSessions?'Show latest 12':`View all ${state.sessions.length}`}</button>`:'';
     content.innerHTML=`<section class="page-head"><div><div class="eyebrow">STUDY LOG / DAILY RHYTHM</div><h1>Make the hours count.</h1><p>Track focused time across both exams. Use the timer for a live session or add hours you studied earlier.</p></div></section>
       <section class="stats-grid"><article class="stat-card"><div class="stat-label">TODAY <span class="stat-icon">◷</span></div><div class="stat-value">${fmtHours(today)}</div><div class="stat-note">Across all study tracks</div></article><article class="stat-card"><div class="stat-label">THIS WEEK <span class="stat-icon">▥</span></div><div class="stat-value">${fmtHours(weekDays().reduce((a,d)=>a+d.minutes,0))}</div><div class="stat-note">Last 7 calendar days</div></article><article class="stat-card"><div class="stat-label">ALL TIME <span class="stat-icon">↗</span></div><div class="stat-value">${fmtHours(totalMinutes())}</div><div class="stat-note">Total logged study time</div></article><article class="stat-card"><div class="stat-label">STREAK <span class="stat-icon">✳</span></div><div class="stat-value">${studyStreak()} <span style="font-size:13px;color:#8c9b97">days</span></div><div class="stat-note">Consecutive study days</div></article></section>
-      <section class="hours-layout"><div style="display:grid;gap:14px">${renderTimerPanel()}<article class="panel"><div class="panel-heading"><div><h2>Log a study block</h2><p>Add a session from your notebook or another timer.</p></div></div>${manualSessionForm()}</article><article class="panel"><div class="panel-heading"><div><h2>Recent sessions</h2><p>Latest entries across your preparation.</p></div></div><div class="sessions-list">${renderSessions()}</div></article></div>
+      <section class="hours-layout"><div style="display:grid;gap:14px">${renderTimerPanel()}<article class="panel"><div class="panel-heading"><div><h2>Log a study block</h2><p>Add a session from your notebook or another timer.</p></div></div>${manualSessionForm()}</article><article class="panel"><div class="panel-heading"><div><h2>${showAllSessions?'All study sessions':'Recent sessions'}</h2><p>${showAllSessions?`Showing all ${state.sessions.length} saved entries.`:'Latest entries across your preparation.'}</p></div>${sessionsToggle}</div><div class="sessions-list">${renderSessions()}</div></article></div>
       <div style="display:grid;gap:14px"><article class="panel"><div class="panel-heading"><div><h2>Seven-day rhythm</h2><p>Daily study hours, most recent first</p></div></div>${renderStudyDays()}</article><article class="panel"><div class="panel-heading"><div><h2>Study by exam</h2><p>Logged time split across both tracks.</p></div></div>${['gate','ese'].map(id=>`<div class="study-day"><div class="study-day-head"><span>${esc(window.SYLLABI[id].short)}</span><b>${fmtHours(courseMinutes(id))}</b></div><div class="bar-track"><div class="bar-fill" style="width:${totalMinutes()?courseMinutes(id)/totalMinutes()*100:0}%"></div></div></div>`).join('')}</article></div></section>`;
   }
   function wheelOptions() {
@@ -479,7 +482,20 @@
   }
   function nav(page) { activePage=page;document.getElementById('sidebar').classList.remove('open');render();window.scrollTo({top:0,behavior:'smooth'}); }
   function toast(message) {
-    const el=document.getElementById('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2600);
+    const el=document.getElementById('toast');el.replaceChildren(document.createTextNode(message));el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2600);
+  }
+  function toastWithAction(message,label,action) {
+    const el=document.getElementById('toast');el.replaceChildren(document.createTextNode(message));
+    const button=document.createElement('button');button.className='toast-action';button.type='button';button.textContent=label;
+    button.addEventListener('click',()=>{clearTimeout(toastTimer);el.classList.remove('show');action();},{once:true});
+    el.append(' ',button);el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),5000);
+  }
+  function deleteSession(index) {
+    if(!Number.isInteger(index)||index<0||index>=state.sessions.length)return;
+    const [session]=state.sessions.splice(index,1);saveState();render();
+    toastWithAction('Study session deleted.','Undo',()=>{
+      state.sessions.splice(Math.min(index,state.sessions.length),0,session);saveState();render();toast('Study session restored.');
+    });
   }
   function exportBackup() {
     const blob=new Blob([JSON.stringify({app:'Fieldnote Study Control Room',version:1,exportedAt:new Date().toISOString(),state},null,2)],{type:'application/json'});
@@ -523,6 +539,8 @@
 
   content.addEventListener('click',e=>{
     const navBtn=e.target.closest('[data-go]');if(navBtn){nav(navBtn.dataset.go);return;}
+    if(e.target.closest('[data-toggle-sessions]')){showAllSessions=!showAllSessions;render();return;}
+    const deleteSessionButton=e.target.closest('[data-delete-session]');if(deleteSessionButton){deleteSession(Number(deleteSessionButton.dataset.deleteSession));return;}
     const check=e.target.closest('[data-check]');
     if(check){const key=`${check.dataset.course}:${check.dataset.chapter}:${check.dataset.topic}`;const bits=bitsFor({key});bits[Number(check.dataset.level)]=check.checked;state.progress[key]=bits;saveState();refreshProgressIndicators();return;}
     const filter=e.target.closest('[data-filter]');if(filter){syllabusFilter=filter.dataset.filter;document.querySelectorAll('#syllabus-filters button').forEach(b=>b.classList.toggle('active',b===filter));applySyllabusFilters();return;}
