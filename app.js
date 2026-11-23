@@ -426,7 +426,7 @@
     names.forEach((name,i)=>{
       const start=-Math.PI/2+i*arc, end=start+arc;
       ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r-4,start,end);ctx.closePath();ctx.fillStyle=wheelColors[i%wheelColors.length];ctx.fill();ctx.strokeStyle='#fffefa';ctx.lineWidth=3;ctx.stroke();
-      const mid=start+arc/2;ctx.save();ctx.translate(cx+Math.cos(mid)*r*.65,cy+Math.sin(mid)*r*.65);ctx.rotate(mid+Math.PI/2);if(mid>Math.PI/2&&mid<Math.PI*1.5)ctx.rotate(Math.PI);ctx.fillStyle='#fffaf0';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`600 ${Math.max(12,Math.min(20,210/n))}px Arial`;
+      const mid=start+arc/2;ctx.save();ctx.translate(cx+Math.cos(mid)*r*.65,cy+Math.sin(mid)*r*.65);let labelRotation=mid+Math.PI/2;if(labelRotation>Math.PI/2&&labelRotation<Math.PI*1.5)labelRotation+=Math.PI;ctx.rotate(labelRotation);ctx.fillStyle='#fffaf0';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`600 ${Math.max(12,Math.min(20,210/n))}px Arial`;
       const maxLen=n>18?11:n>12?15:20;let label=String(name);if(label.length>maxLen)label=label.slice(0,maxLen-1)+'…';ctx.fillText(label,0,0);ctx.restore();
     });
     ctx.beginPath();ctx.arc(cx,cy,r-4,0,2*Math.PI);ctx.strokeStyle='#fffefa';ctx.lineWidth=6;ctx.stroke();
