@@ -620,8 +620,6 @@
     const navBtn=e.target.closest('[data-go]');if(navBtn){nav(navBtn.dataset.go);return;}
     if(e.target.closest('[data-toggle-sessions]')){showAllSessions=!showAllSessions;render();return;}
     const deleteSessionButton=e.target.closest('[data-delete-session]');if(deleteSessionButton){deleteSession(Number(deleteSessionButton.dataset.deleteSession));return;}
-    const check=e.target.closest('[data-check]');
-    if(check){const key=`${check.dataset.course}:${check.dataset.chapter}:${check.dataset.topic}`;const bits=bitsFor({key});bits[Number(check.dataset.level)]=check.checked;state.progress[key]=bits;saveState();refreshProgressIndicators();return;}
     const filter=e.target.closest('[data-filter]');if(filter){syllabusFilter=filter.dataset.filter;document.querySelectorAll('#syllabus-filters button').forEach(b=>b.classList.toggle('active',b===filter));applySyllabusFilters();return;}
     if(e.target.closest('[data-export]')){exportBackup();return;}
     if(e.target.closest('[data-import]')){document.getElementById('backup-file')?.click();return;}
