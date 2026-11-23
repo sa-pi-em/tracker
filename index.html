@@ -64,6 +64,20 @@
         <div class="cloud-account-card"><span class="cloud-account-icon">✓</span><span><b id="cloud-account-email">Connected</b><small>Private sync is active for this account.</small></span></div>
         <div class="cloud-account-actions"><button class="btn btn-primary" id="cloud-sync-now" type="button">↻ Sync now</button><button class="btn btn-secondary" id="cloud-signout" type="button">Sign out</button></div>
       </div>
+      <div class="cloud-data-choice" id="cloud-data-choice-panel" hidden>
+        <p class="cloud-choice-lead">Both copies contain saved tracker data. Choose how you want to continue.</p>
+        <div class="cloud-choice-actions">
+          <button class="btn btn-primary" type="button" data-cloud-choice="merge">Merge both <span>(recommended)</span></button>
+          <button class="btn btn-secondary" type="button" data-cloud-choice="account">Use account data</button>
+          <button class="btn btn-secondary" type="button" data-cloud-choice="replace">Replace account data with this browser</button>
+        </div>
+        <p class="cloud-choice-note">Merge keeps completed checkmarks from either copy, combines sessions and wheel topics, and uses the account’s exam dates. “Use account data” replaces this browser’s tracker copy.</p>
+      </div>
+      <div class="cloud-data-choice" id="cloud-replace-confirm-panel" hidden>
+        <h3>Replace the account copy?</h3>
+        <p class="cloud-choice-note">This will overwrite the signed-in account’s tracker data with this browser’s copy, and cannot be undone in the tracker. Choose “Merge both” to keep data from both copies.</p>
+        <div class="cloud-choice-actions"><button class="btn btn-primary" type="button" data-cloud-choice="confirm-replace">Confirm replacement</button><button class="btn btn-secondary" type="button" data-cloud-choice="cancel-replace">Go back</button></div>
+      </div>
       <p class="cloud-message" id="cloud-message" role="status" aria-live="polite"></p>
       <div class="cloud-modal-foot">Database access is restricted to your signed-in account.</div>
     </section>

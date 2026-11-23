@@ -31,3 +31,11 @@
 @media(max-width:420px){.session-row{grid-template-columns:34px minmax(0,1fr) auto auto;gap:5px}.session-delete{padding:5px 6px;font-size:8px}}
 @media(max-width:760px){.topbar-right{gap:8px}.cloud-trigger{padding:7px 8px}.cloud-modal{padding:10px}.cloud-dialog{padding:25px 20px}}
 @media(max-width:420px){.cloud-trigger{gap:5px;font-size:8px}.cloud-trigger b{font-size:8px}.profile-chip{display:none}}
+
+.cloud-data-choice{display:grid;gap:11px;margin-top:6px}
+.cloud-data-choice h3{margin:0;color:#294d53;font:600 16px var(--display)}
+.cloud-choice-lead,.cloud-choice-note{margin:0;color:#718287;font-size:11px;line-height:1.55}
+.cloud-choice-actions{display:grid;gap:8px}
+.cloud-choice-actions .btn{width:100%;text-align:center}
+.cloud-choice-actions .btn span{font-size:10px;font-weight:500;opacity:.85}
+.cloud-choice-note{padding-top:2px;color:#87938e;font-size:10px}

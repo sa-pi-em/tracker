@@ -17,7 +17,10 @@
   let cloudSyncTimer = null;
   let cloudSyncChain = Promise.resolve();
   let cloudSaveVersion = 0;
+  let cloudSyncReadyUserId = '';
   let applyingCloudData = false;
+  let pendingCloudChoice = null;
+  let confirmingCloudReplace = false;
   let authMode = 'signin';
   let activePage = 'overview';
   let activeCourse = 'gate';
@@ -54,6 +57,7 @@
     } catch (_) {}
   }
   function cloudConfigured() { return !!(cloudBase && cloudKey); }
+  function cloudAutoSyncReady() { return !!cloudUser&&(state.cloudUserId===cloudUser.id||cloudSyncReadyUserId===cloudUser.id); }
   function setCloudStatus(text, mode='') {
     const label=document.getElementById('cloud-status-text');if(label)label.textContent=text;
     const trigger=document.getElementById('cloud-trigger');if(trigger)trigger.className=`cloud-trigger ${mode}`.trim();
@@ -64,15 +68,20 @@
     el.textContent=text;el.classList.toggle('error',!!error);
   }
   function updateCloudModal() {
+    const choosingData=!!pendingCloudChoice;
     document.getElementById('cloud-setup-panel').hidden=cloudConfigured();
-    document.getElementById('cloud-auth-panel').hidden=!cloudConfigured()||!!cloudUser;
-    document.getElementById('cloud-account-panel').hidden=!cloudUser;
+    document.getElementById('cloud-auth-panel').hidden=!cloudConfigured()||!!cloudUser||choosingData;
+    document.getElementById('cloud-account-panel').hidden=!cloudUser||choosingData;
+    document.getElementById('cloud-data-choice-panel').hidden=!choosingData||confirmingCloudReplace;
+    document.getElementById('cloud-replace-confirm-panel').hidden=!choosingData||!confirmingCloudReplace;
+    document.getElementById('cloud-dialog-title').textContent=choosingData?'Choose which study data to keep.':'Your progress, wherever you study.';
+    document.querySelector('.cloud-intro').textContent=choosingData?'Saved tracker data exists in this browser and in your account. Choose how to continue.':'Sign in to sync this tracker across your devices. Your current browser data stays saved locally too.';
     if(cloudUser)document.getElementById('cloud-account-email').textContent=cloudUser.email||'Signed-in account';
     setCloudMessage('');
   }
   function openCloudModal() {
     updateCloudModal();document.getElementById('cloud-modal').hidden=false;
-    const focus=document.querySelector('#cloud-auth-panel:not([hidden]) input[name="email"]')||document.getElementById('cloud-close');focus.focus();
+    const focus=document.querySelector('#cloud-data-choice-panel:not([hidden]) [data-cloud-choice], #cloud-replace-confirm-panel:not([hidden]) [data-cloud-choice], #cloud-auth-panel:not([hidden]) input[name="email"]')||document.getElementById('cloud-close');focus.focus();
   }
   function closeCloudModal() { document.getElementById('cloud-modal').hidden=true; }
   async function responseData(response) {
@@ -107,11 +116,15 @@
   function cloudSnapshot(source=state) {
     return {progress:source.progress||{},sessions:source.sessions||[],timer:source.timer||null,wheelTopics:source.wheelTopics||[],examDates:source.examDates||{...DEFAULT_EXAM_DATES}};
   }
-  function hasLocalStudyData() {
-    return Object.keys(state.progress||{}).length>0||(state.sessions||[]).length>0||!!state.timer||
-      JSON.stringify(state.examDates)!==JSON.stringify(DEFAULT_EXAM_DATES)||
-      JSON.stringify(state.wheelTopics)!==JSON.stringify(DEFAULT_WHEEL);
+  function hasStudyData(source) {
+    const dates=source.examDates||{};
+    const hasCustomDate=Object.keys(DEFAULT_EXAM_DATES).some(key=>dates[key]&&dates[key]!==DEFAULT_EXAM_DATES[key]);
+    const hasCompletedLevels=Object.values(source.progress||{}).some(bits=>Array.isArray(bits)&&bits.some(Boolean));
+    return hasCompletedLevels||(source.sessions||[]).length>0||!!source.timer||hasCustomDate||
+      JSON.stringify(source.wheelTopics||DEFAULT_WHEEL)!==JSON.stringify(DEFAULT_WHEEL);
   }
+  function hasLocalStudyData() { return hasStudyData(state); }
+  function copyStudyData(source) { return JSON.parse(JSON.stringify(cloudSnapshot(source))); }
   function mergeStudyData(local, remote) {
     const progress={...(local.progress||{}),...(remote.progress||{})};
     for(const [key,remoteBits] of Object.entries(remote.progress||{})){
@@ -148,36 +161,64 @@
     else scheduleCloudSave();
   }
   function scheduleCloudSave() {
-    if(!cloudUser||applyingCloudData)return;
+    if(!cloudUser||!cloudAutoSyncReady()||applyingCloudData||pendingCloudChoice)return;
     cloudSaveVersion++;const version=cloudSaveVersion;clearTimeout(cloudSyncTimer);setCloudStatus('Saving…','syncing');
     cloudSyncTimer=setTimeout(()=>{cloudSyncChain=cloudSyncChain.then(()=>uploadCloudSnapshot(version)).catch(error=>{setCloudStatus('Local copy saved','');setCloudMessage(error.message,true);});},800);
   }
   async function synchronizeCloud() {
-    if(!cloudUser||!cloudConfigured())return;
+    if(!cloudUser||!cloudConfigured())return true;
+    if(pendingCloudChoice)return false;
     clearTimeout(cloudSyncTimer);const syncVersion=++cloudSaveVersion;
     setCloudStatus('Syncing…','syncing');
     const path=`/rest/v1/study_data?select=data,updated_at&user_id=eq.${encodeURIComponent(cloudUser.id)}&limit=1`;
     const rows=await cloudRequest(path);
-    if(syncVersion!==cloudSaveVersion)return;
+    if(syncVersion!==cloudSaveVersion)return true;
     if(state.cloudUserId&&state.cloudUserId!==cloudUser.id)throw new Error('This browser is linked to a different account. Export your local backup before switching accounts.');
+    cloudSyncReadyUserId=cloudUser.id;
     const remote=Array.isArray(rows)&&rows.length?rows[0].data:null;
     if(!remote){
       applyCloudSnapshot(cloudSnapshot(),cloudUser.id,true);
       await uploadCloudSnapshot(cloudSaveVersion);
-      render();return;
+      render();return true;
     }
     if(state.cloudUserId===cloudUser.id&&state.cloudDirty){
       applyCloudSnapshot(cloudSnapshot(),cloudUser.id,true);
       await uploadCloudSnapshot(cloudSaveVersion);
     }else if(hasLocalStudyData()&&state.cloudUserId!==cloudUser.id){
-      const merged=mergeStudyData(cloudSnapshot(),remote);
-      applyCloudSnapshot(merged,cloudUser.id,true);
+      if(hasStudyData(remote)){
+        pendingCloudChoice={local:copyStudyData(state),remote:copyStudyData(remote),userId:cloudUser.id};
+        confirmingCloudReplace=false;setCloudStatus('Choose data','');updateCloudModal();document.getElementById('cloud-modal').hidden=false;
+        document.querySelector('#cloud-data-choice-panel [data-cloud-choice="merge"]')?.focus();return false;
+      }
+      applyCloudSnapshot(cloudSnapshot(),cloudUser.id,true);
       await uploadCloudSnapshot(cloudSaveVersion);
     }else{
       applyCloudSnapshot(remote,cloudUser.id,false);
       setCloudStatus('Cloud synced','connected');
     }
     render();
+    return true;
+  }
+  async function resolveCloudChoice(choice) {
+    if(!pendingCloudChoice||!cloudUser||pendingCloudChoice.userId!==cloudUser.id)return;
+    if(choice==='replace'){
+      confirmingCloudReplace=true;updateCloudModal();document.querySelector('#cloud-replace-confirm-panel [data-cloud-choice="confirm-replace"]')?.focus();return;
+    }
+    if(choice==='cancel-replace'){
+      confirmingCloudReplace=false;updateCloudModal();document.querySelector('#cloud-data-choice-panel [data-cloud-choice="replace"]')?.focus();return;
+    }
+    const pending=pendingCloudChoice;
+    try{
+      if(choice==='account'){
+        applyCloudSnapshot(pending.remote,cloudUser.id,false);setCloudStatus('Cloud synced','connected');render();
+      }else if(choice==='merge'){
+        applyCloudSnapshot(mergeStudyData(pending.local,pending.remote),cloudUser.id,true);await uploadCloudSnapshot(cloudSaveVersion);render();
+      }else if(choice==='confirm-replace'){
+        applyCloudSnapshot(pending.local,cloudUser.id,true);await uploadCloudSnapshot(cloudSaveVersion);render();
+      }else return;
+      pendingCloudChoice=null;confirmingCloudReplace=false;updateCloudModal();closeCloudModal();
+      toast(choice==='account'?'Using your account data.':choice==='merge'?'Local and account data merged.':'Account data replaced with this browser copy.');
+    }catch(error){setCloudMessage(`Could not finish syncing. Your browser data is still saved. ${error.message}`,true);}
   }
   async function initializeCloudSession() {
     if(!cloudConfigured()){setCloudStatus('Local only','');return;}
@@ -217,24 +258,25 @@
       if(state.cloudUserId&&user?.id&&state.cloudUserId!==user.id){setCloudMessage('This browser has data linked to another account. Sign in to that account, or export a backup before switching.',true);return;}
       cloudAuth={...data,expiresAt:Date.now()+Number(data.expires_in||3600)*1000};cloudUser=user;storeCloudAuth();
       updateCloudModal();setCloudStatus('Cloud connected','connected');setCloudMessage('Signed in. Syncing your study data…');
-      await synchronizeCloud();closeCloudModal();toast('Cloud sync is connected.');
+      const synced=await synchronizeCloud();if(synced){closeCloudModal();toast('Cloud sync is connected.');}
     }catch(error){setCloudMessage(error.message||'Sign-in failed. Please try again.',true);}
     finally{submit.disabled=false;submit.textContent=authMode==='signup'?'Create account':'Sign in';}
   }
   async function signOutCloud() {
     try{if(cloudAuth?.access_token&&cloudConfigured())await cloudRequest('/auth/v1/logout',{method:'POST'});}catch(_){}
-    cloudAuth=null;cloudUser=null;storeCloudAuth();setCloudStatus(cloudConfigured()?'Connect to sync':'Local only','');
+    cloudAuth=null;cloudUser=null;cloudSyncReadyUserId='';pendingCloudChoice=null;confirmingCloudReplace=false;storeCloudAuth();setCloudStatus(cloudConfigured()?'Connect to sync':'Local only','');
     if(state.cloudUserId){state.cloudDirty=true;try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(_){}}
     updateCloudModal();setCloudMessage('Signed out. This browser copy remains saved locally.');
   }
   async function manualCloudSync() {
     const button=document.getElementById('cloud-sync-now');button.disabled=true;button.textContent='Syncing…';
-    try{await synchronizeCloud();setCloudMessage('Your tracker is up to date.');}
+    try{const synced=await synchronizeCloud();if(synced)setCloudMessage('Your tracker is up to date.');}
     catch(error){setCloudStatus('Sync needs attention','');setCloudMessage(error.message||'Sync failed. Your local copy is still saved.',true);}
     finally{button.disabled=false;button.textContent='↻ Sync now';}
   }
   function saveState() {
-    if (cloudUser && !applyingCloudData) {
+    if (pendingCloudChoice) pendingCloudChoice.local=copyStudyData(state);
+    if (cloudUser && !applyingCloudData && !pendingCloudChoice && cloudAutoSyncReady()) {
       state.cloudUserId = cloudUser.id;
       state.cloudDirty = true;
     }
@@ -246,7 +288,7 @@
       const status = document.getElementById('save-status-text');
       if (status) status.textContent = 'Storage is unavailable';
     }
-    if (cloudUser && !applyingCloudData) scheduleCloudSave();
+    if (cloudUser && !applyingCloudData && !pendingCloudChoice && cloudAutoSyncReady()) scheduleCloudSave();
   }
   function esc(value) {
     return String(value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
@@ -598,6 +640,7 @@
   document.getElementById('cloud-close').addEventListener('click',closeCloudModal);
   document.querySelectorAll('[data-close-cloud]').forEach(el=>el.addEventListener('click',closeCloudModal));
   document.querySelectorAll('[data-cloud-mode]').forEach(button=>button.addEventListener('click',()=>setAuthMode(button.dataset.cloudMode)));
+  document.querySelectorAll('[data-cloud-choice]').forEach(button=>button.addEventListener('click',()=>resolveCloudChoice(button.dataset.cloudChoice)));
   document.getElementById('cloud-auth-form').addEventListener('submit',e=>{e.preventDefault();submitCloudAuth(e.currentTarget);});
   document.getElementById('cloud-sync-now').addEventListener('click',manualCloudSync);
   document.getElementById('cloud-signout').addEventListener('click',signOutCloud);
