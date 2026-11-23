@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#132d3a">
+  <meta name="description" content="A personal syllabus and study-hours dashboard for GATE EC and UPSC ESE E&T preparation.">
+  <title>Signal & Syllabus — Study Control Room</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#overview" aria-label="Signal and Syllabus home">
+        <span class="brand-mark"><span></span><span></span><span></span><span></span></span>
+        <span><b>FIELDNOTE</b><small>ENGINEERING PREP / 2027</small></span>
+      </a>
+      <div class="sidebar-caption">STUDY DESK</div>
+      <nav class="primary-nav" aria-label="Main navigation">
+        <button class="nav-link active" data-page="overview"><span class="nav-icon">⌂</span>Overview</button>
+        <button class="nav-link" data-page="syllabus"><span class="nav-icon">▤</span>Syllabus tracker <span class="nav-count" id="nav-topic-count">—</span></button>
+        <button class="nav-link" data-page="hours"><span class="nav-icon">◷</span>Study hours</button>
+        <button class="nav-link" data-page="wheel"><span class="nav-icon">◉</span>Topic roulette</button>
+      </nav>
+      <div class="sidebar-caption exam-caption">YOUR EXAMS</div>
+      <button class="exam-switch selected" data-course="gate">
+        <span class="exam-sigil gate-sigil">G</span><span><b>GATE EC</b><small>Electronics & Communication</small></span><span class="exam-dot"></span>
+      </button>
+      <button class="exam-switch" data-course="ese">
+        <span class="exam-sigil ese-sigil">E</span><span><b>UPSC ESE E&T</b><small>Prelims · 2027</small></span><span class="exam-dot"></span>
+      </button>
+      <div class="sidebar-bottom">
+        <div class="sidebar-motto"><span class="motto-line"></span><p>Small signals.<br><i>Steady progress.</i></p></div>
+        <div class="save-status"><span class="save-dot"></span><span id="save-status-text">Saved on this device</span></div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobile-menu" aria-label="Open navigation">☰</button>
+        <div class="breadcrumb"><span>STUDY CONTROL ROOM</span><b>/</b><strong id="crumb-current">OVERVIEW</strong></div>
+        <div class="topbar-right"><span class="today-label" id="today-label"></span><button class="cloud-trigger" id="cloud-trigger" type="button"><span class="cloud-indicator" id="cloud-indicator"></span><span id="cloud-status-text">Local only</span><b id="cloud-trigger-action">Connect</b></button><span class="profile-chip">S</span></div>
+      </header>
+      <div class="content" id="content" aria-live="polite"></div>
+      <footer class="app-footer"><span>BUILT FOR THE LONG RUN</span><span>Local save by default · Optional cloud sync</span></footer>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="cloud-modal" id="cloud-modal" hidden>
+    <div class="cloud-scrim" data-close-cloud></div>
+    <section class="cloud-dialog" role="dialog" aria-modal="true" aria-labelledby="cloud-dialog-title">
+      <button class="cloud-close" id="cloud-close" type="button" aria-label="Close">×</button>
+      <div class="eyebrow">OPTIONAL / ACCOUNT SYNC</div>
+      <h2 id="cloud-dialog-title">Your progress, wherever you study.</h2>
+      <p class="cloud-intro">Sign in to sync this tracker across your devices. Your current browser data stays saved locally too.</p>
+      <div id="cloud-setup-panel" hidden>
+        <div class="cloud-setup-note"><b>One-time Supabase setup</b><ol><li>Create a Supabase project.</li><li>Run <code>supabase/schema.sql</code> in its SQL Editor.</li><li>Put the project URL and publishable key in <code>backend-config.js</code>, then publish the site again.</li></ol><p>Use the public publishable/anon key only. Never put a service-role or secret key in this website.</p></div>
+      </div>
+      <div id="cloud-auth-panel" hidden>
+        <div class="cloud-mode-tabs"><button class="active" type="button" data-cloud-mode="signin">Sign in</button><button type="button" data-cloud-mode="signup">Create account</button></div>
+        <form id="cloud-auth-form" class="cloud-auth-form"><label><span class="field-label">EMAIL</span><input class="input" name="email" type="email" autocomplete="email" required></label><label><span class="field-label">PASSWORD</span><input class="input" name="password" type="password" minlength="8" autocomplete="current-password" required></label><button class="btn btn-primary" id="cloud-auth-submit" type="submit">Sign in</button></form>
+      </div>
+      <div id="cloud-account-panel" hidden>
+        <div class="cloud-account-card"><span class="cloud-account-icon">✓</span><span><b id="cloud-account-email">Connected</b><small>Private sync is active for this account.</small></span></div>
+        <div class="cloud-account-actions"><button class="btn btn-primary" id="cloud-sync-now" type="button">↻ Sync now</button><button class="btn btn-secondary" id="cloud-signout" type="button">Sign out</button></div>
+      </div>
+      <p class="cloud-message" id="cloud-message" role="status" aria-live="polite"></p>
+      <div class="cloud-modal-foot">Database access is restricted to your signed-in account.</div>
+    </section>
+  </div>
+  <script src="syllabus.js"></script>
+  <script src="backend-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
