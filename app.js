@@ -416,7 +416,7 @@
       </section>
       <section class="overview-grid">
         <article class="panel"><div class="panel-heading"><div><h2>Syllabus pulse</h2><p>Level-wise completion across each exam</p></div><button class="text-link" data-go="syllabus">View chapters ↗</button></div><div class="course-progress-list">${courseProgressCard('gate')}${courseProgressCard('ese')}</div></article>
-        <article class="panel week-panel"><div class="panel-heading"><div><h2>This week</h2><p>Your last seven days at a glance</p></div><button class="text-link" data-go="hours">Log time ↗</button></div><div class="week-total">${fmtHours(weekDays().reduce((a,d)=>a+d.minutes,0))} <small>logged this week</small></div>${weekChart()}<div class="week-caption"><span>Daily study time</span><span>Today highlighted in clay</span></div></article>
+        <article class="panel week-panel"><div class="panel-heading"><div><h2>This week</h2><p>Your last seven days at a glance</p></div><button class="text-link" data-go="hours">Log time ↗</button></div><div class="week-total">${fmtSessionDuration(weekDays().reduce((a,d)=>a+d.minutes,0))} <small>logged this week</small></div>${weekChart()}<div class="week-caption"><span>Daily study time</span><span>Today highlighted in clay</span></div></article>
       </section>
       <section class="quick-grid"><button class="quick-card" data-go="hours"><span class="quick-icon">◷</span><h3>Start a focused session</h3><p>Use the timer or log a study block.</p></button><button class="quick-card" data-go="wheel"><span class="quick-icon">◉</span><h3>Pick your next topic</h3><p>Let the roulette break the tie.</p></button></section>`;
   }
