@@ -357,6 +357,7 @@
     return { courses:{gate,ese}, count:total, levelDone:done, levelPct:done.map(n=>total?Math.round(n/total*100):0), totalPct:total?Math.round(done.reduce((a,b)=>a+b,0)/(total*3)*100):0 };
   }
   function fmtHours(minutes) { const val = minutes / 60; return Number.isInteger(val) ? `${val}h` : `${val.toFixed(1)}h`; }
+  function fmtSessionDuration(minutes) { const value=Math.max(0,Math.round(Number(minutes)||0));const hours=Math.floor(value/60),mins=value%60;return hours?`${hours}h${mins?` ${mins}m`:''}`:`${mins}m`; }
   function totalMinutes() { return state.sessions.reduce((sum,s)=>sum+(Number(s.minutes)||0),0); }
   function minutesFor(key) { return state.sessions.filter(s=>s.date===key).reduce((sum,s)=>sum+(Number(s.minutes)||0),0); }
   function courseMinutes(courseId) { return state.sessions.filter(s=>s.course===courseId).reduce((sum,s)=>sum+(Number(s.minutes)||0),0); }
@@ -479,7 +480,7 @@
     const visible=showAllSessions?records:records.slice(0,12);
     return visible.map(({session:s,index})=>{
       const startTime=Number.isFinite(s.startedAt)?prettyDate(new Date(s.startedAt),{hour:'numeric',minute:'2-digit'}):'';
-      return `<div class="session-row"><span class="session-date">${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}</span><span><span class="session-course">${esc(window.SYLLABI[s.course]?.short||'Mixed')} · ${esc(s.note||'Study session')}</span>${startTime?`<small class="session-note">Started ${esc(startTime)}</small>`:''}</span><span class="session-duration">${fmtHours(s.minutes)}</span><button class="session-delete" type="button" data-delete-session="${index}" aria-label="Delete ${esc(s.note||'study session')} from ${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}" title="Delete session">Delete</button></div>`;
+      return `<div class="session-row"><span class="session-date">${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}</span><span><span class="session-course">${esc(window.SYLLABI[s.course]?.short||'Mixed')} · ${esc(s.note||'Study session')}</span>${startTime?`<small class="session-note">Started ${esc(startTime)}</small>`:''}</span><span class="session-duration">${fmtSessionDuration(s.minutes)}</span><button class="session-delete" type="button" data-delete-session="${index}" aria-label="Delete ${esc(s.note||'study session')} from ${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}" title="Delete session">Delete</button></div>`;
     }).join('');
   }
   function renderHours() {
