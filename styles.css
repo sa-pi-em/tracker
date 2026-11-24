@@ -27,6 +27,7 @@
 .toast-action{margin-left:9px;border:0;border-radius:5px;background:#e8b18b;color:#183840;padding:5px 8px;font:600 10px var(--mono);cursor:pointer}
 .toast-action:hover{background:#f0c39f}
 .timer-actions{flex-wrap:wrap}
+.timer-topic-field{position:relative;z-index:1;display:grid;gap:6px;max-width:360px;margin:0 auto 14px;text-align:left}.timer-topic-field>span{font:9px var(--mono);color:#a5c6ba;letter-spacing:.05em}.timer-topic-field .input{width:100%}
 @media(max-width:760px){.session-row{grid-template-columns:38px minmax(0,1fr) auto auto;gap:7px}}
 @media(max-width:420px){.session-row{grid-template-columns:34px minmax(0,1fr) auto auto;gap:5px}.session-delete{padding:5px 6px;font-size:8px}}
 @media(max-width:760px){.topbar-right{gap:8px}.cloud-trigger{padding:7px 8px}.cloud-modal{padding:10px}.cloud-dialog{padding:25px 20px}}

@@ -446,8 +446,10 @@
     const active=!!state.timer;
     const paused=active&&Number.isFinite(state.timer.pausedAt);
     const controls=active?`${paused?'<button class="btn btn-primary" data-resume-timer>▶ Resume</button>':'<button class="btn btn-primary" data-pause-timer>Ⅱ Pause</button>'}<button class="btn btn-secondary" data-stop-timer>■ Finish session</button>`:'<button class="btn btn-primary" data-start-timer>▶ Start studying</button>';
-    const timerMeta=active?(paused?`Paused · ${esc(window.SYLLABI[state.timer.course]?.short||'study')} · started ${prettyDate(new Date(state.timer.startedAt),{hour:'numeric',minute:'2-digit'})}`:`Tracking ${esc(window.SYLLABI[state.timer.course]?.short||'study')} since ${prettyDate(new Date(state.timer.startedAt),{hour:'numeric',minute:'2-digit'})}`):'Timer keeps running if you switch pages or refresh.';
-    return `<section class="timer-panel"><div class="timer-top"><h2>Focus timer</h2><span class="timer-state">${active?(paused?'SESSION PAUSED':'SESSION IN PROGRESS'):'READY WHEN YOU ARE'}</span></div><div class="timer-face" id="timer-face">${active?timerText():'00:00:00'}</div><div class="timer-actions">${controls}<button class="btn btn-secondary" data-go="wheel">Pick a topic ↗</button></div><div class="timer-meta">${timerMeta}</div></section>`;
+    const topic=active&&state.timer.topic?` · ${esc(state.timer.topic)}`:'';
+    const timerMeta=active?(paused?`Paused · ${esc(window.SYLLABI[state.timer.course]?.short||'study')}${topic} · started ${prettyDate(new Date(state.timer.startedAt),{hour:'numeric',minute:'2-digit'})}`:`Tracking ${esc(window.SYLLABI[state.timer.course]?.short||'study')}${topic} since ${prettyDate(new Date(state.timer.startedAt),{hour:'numeric',minute:'2-digit'})}`):'Timer keeps running if you switch pages or refresh.';
+    const topicField=active?'':`<label class="timer-topic-field"><span>STUDY TOPIC · OPTIONAL</span><input class="input" id="timer-topic" maxlength="90" list="timer-topic-options" placeholder="e.g. Fourier transforms"><datalist id="timer-topic-options">${state.wheelTopics.map(item=>`<option value="${esc(item)}">`).join('')}</datalist></label>`;
+    return `<section class="timer-panel"><div class="timer-top"><h2>Focus timer</h2><span class="timer-state">${active?(paused?'SESSION PAUSED':'SESSION IN PROGRESS'):'READY WHEN YOU ARE'}</span></div><div class="timer-face" id="timer-face">${active?timerText():'00:00:00'}</div>${topicField}<div class="timer-actions">${controls}<button class="btn btn-secondary" data-go="wheel">Pick a topic ↗</button></div><div class="timer-meta">${timerMeta}</div></section>`;
   }
   function timerText() {
     if (!state.timer) return '00:00:00';
@@ -626,7 +628,7 @@
     const filter=e.target.closest('[data-filter]');if(filter){syllabusFilter=filter.dataset.filter;document.querySelectorAll('#syllabus-filters button').forEach(b=>b.classList.toggle('active',b===filter));applySyllabusFilters();return;}
     if(e.target.closest('[data-export]')){exportBackup();return;}
     if(e.target.closest('[data-import]')){document.getElementById('backup-file')?.click();return;}
-    if(e.target.closest('[data-start-timer]')){state.timer={startedAt:Date.now(),course:activeCourse,pausedMs:0};saveState();render();return;}
+    if(e.target.closest('[data-start-timer]')){const topic=String(document.getElementById('timer-topic')?.value||'').trim().replace(/\s+/g,' ').slice(0,90);state.timer={startedAt:Date.now(),course:activeCourse,topic,pausedMs:0};saveState();render();return;}
     if(e.target.closest('[data-pause-timer]')){pauseTimer();return;}
     if(e.target.closest('[data-resume-timer]')){resumeTimer();return;}
     if(e.target.closest('[data-stop-timer]')){finishTimer();return;}
@@ -654,7 +656,7 @@
   function finishTimer() {
     if(!state.timer)return;
     const timer=state.timer;const end=Number.isFinite(timer.pausedAt)?timer.pausedAt:Date.now();const seconds=Math.max(0,Math.floor((end-timer.startedAt-(Number(timer.pausedMs)||0))/1000));
-    if(seconds>=60){state.sessions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,7)}`,course:timer.course,date:localKey(new Date(timer.startedAt)),startedAt:timer.startedAt,minutes:Math.max(1,Math.round(seconds/60)),note:'Focus timer',createdAt:Date.now()});}
+    if(seconds>=60){state.sessions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,7)}`,course:timer.course,date:localKey(new Date(timer.startedAt)),startedAt:timer.startedAt,minutes:Math.max(1,Math.round(seconds/60)),note:timer.topic||'Focus timer',createdAt:Date.now()});}
     state.timer=null;saveState();toast(seconds>=60?'Focus session saved to your study log.':'Short session ended; no time was logged.');render();
   }
   document.querySelectorAll('.nav-link').forEach(btn=>btn.addEventListener('click',()=>nav(btn.dataset.page)));
