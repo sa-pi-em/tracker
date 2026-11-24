@@ -475,7 +475,10 @@
     const records=state.sessions.map((session,index)=>({session,index})).sort((a,b)=>b.session.date.localeCompare(a.session.date)||(b.session.createdAt||0)-(a.session.createdAt||0));
     if (!records.length) return '<div class="empty-state">Your first session can start with the timer or a manual entry.</div>';
     const visible=showAllSessions?records:records.slice(0,12);
-    return visible.map(({session:s,index})=>`<div class="session-row"><span class="session-date">${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}</span><span><span class="session-course">${esc(window.SYLLABI[s.course]?.short||'Mixed')} · ${esc(s.note||'Study session')}</span></span><span class="session-duration">${fmtHours(s.minutes)}</span><button class="session-delete" type="button" data-delete-session="${index}" aria-label="Delete ${esc(s.note||'study session')} from ${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}" title="Delete session">Delete</button></div>`).join('');
+    return visible.map(({session:s,index})=>{
+      const startTime=Number.isFinite(s.startedAt)?prettyDate(new Date(s.startedAt),{hour:'numeric',minute:'2-digit'}):'';
+      return `<div class="session-row"><span class="session-date">${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}</span><span><span class="session-course">${esc(window.SYLLABI[s.course]?.short||'Mixed')} · ${esc(s.note||'Study session')}</span>${startTime?`<small class="session-note">Started ${esc(startTime)}</small>`:''}</span><span class="session-duration">${fmtHours(s.minutes)}</span><button class="session-delete" type="button" data-delete-session="${index}" aria-label="Delete ${esc(s.note||'study session')} from ${esc(prettyDate(dateFromKey(s.date),{month:'short',day:'numeric'}))}" title="Delete session">Delete</button></div>`;
+    }).join('');
   }
   function renderHours() {
     const today=minutesFor(localKey(new Date()));
@@ -651,7 +654,7 @@
   function finishTimer() {
     if(!state.timer)return;
     const timer=state.timer;const end=Number.isFinite(timer.pausedAt)?timer.pausedAt:Date.now();const seconds=Math.max(0,Math.floor((end-timer.startedAt-(Number(timer.pausedMs)||0))/1000));
-    if(seconds>=60){state.sessions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,7)}`,course:timer.course,date:localKey(new Date(timer.startedAt)),minutes:Math.max(1,Math.round(seconds/60)),note:'Focus timer',createdAt:Date.now()});}
+    if(seconds>=60){state.sessions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,7)}`,course:timer.course,date:localKey(new Date(timer.startedAt)),startedAt:timer.startedAt,minutes:Math.max(1,Math.round(seconds/60)),note:'Focus timer',createdAt:Date.now()});}
     state.timer=null;saveState();toast(seconds>=60?'Focus session saved to your study log.':'Short session ended; no time was logged.');render();
   }
   document.querySelectorAll('.nav-link').forEach(btn=>btn.addEventListener('click',()=>nav(btn.dataset.page)));
