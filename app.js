@@ -46,6 +46,8 @@
   let calendarSelectedDate = localKey(new Date());
   let prepThemeDate = localKey(new Date());
   const quoteTransitionTimers = new WeakMap();
+  let activeQuoteStage = '';
+  let activeQuote = '';
   let syllabusFilter = 'All sections';
   let showAllSessions = false;
   let wheelRotation = 0;
@@ -435,14 +437,22 @@
     else if(syllabusPct>=50)mode='checkpoint';
     else if(activeDays>0||syllabusPct>0||latestRating==='satisfied'||latestRating==='average')mode='building';
     else mode='starting';
-    const profile=PREP_THEMES[mode],seed=`${today}:${mode}`.split('').reduce((hash,char)=>(hash*31+char.charCodeAt(0))>>>0,7);
-    const todayHours=Math.floor(todayMinutes/60);let quote=profile.quietQuotes[seed%profile.quietQuotes.length],quoteCue='RECENT PREP / 7-DAY REFLECTION';
-    if(todaySessionCount&&todayHours===0){quote=FIRST_BLOCK_QUOTES[seed%FIRST_BLOCK_QUOTES.length];quoteCue='TODAY / FIRST BLOCK';}
-    else if(todaySessionCount&&todayHours>0&&todayHours%2===0){quote=BREAK_QUOTES[(seed+todayHours/2-1)%BREAK_QUOTES.length];quoteCue=`${todayHours} HOURS / BREAK CHECK`;}
-    else if(todaySessionCount&&todayHours>0){quote=FOCUS_HOUR_QUOTES[(seed+Math.floor((todayHours-1)/2))%FOCUS_HOUR_QUOTES.length];quoteCue=`${todayHours} ${todayHours===1?'HOUR':'HOURS'} / FOCUS CHECK`;}
+    const profile=PREP_THEMES[mode],todayHours=Math.floor(todayMinutes/60);let quoteBank=profile.quietQuotes,quoteStage=`${today}:${mode}:reflection`,quoteCue='RECENT PREP / 7-DAY REFLECTION';
+    if(todaySessionCount&&todayHours===0){quoteBank=FIRST_BLOCK_QUOTES;quoteStage=`${today}:${mode}:first-block`;quoteCue='TODAY / FIRST BLOCK';}
+    else if(todaySessionCount&&todayHours>0&&todayHours%2===0){quoteBank=BREAK_QUOTES;quoteStage=`${today}:${mode}:break:${todayHours}`;quoteCue=`${todayHours} HOURS / BREAK CHECK`;}
+    else if(todaySessionCount&&todayHours>0){quoteBank=FOCUS_HOUR_QUOTES;quoteStage=`${today}:${mode}:focus:${todayHours}`;quoteCue=`${todayHours} ${todayHours===1?'HOUR':'HOURS'} / FOCUS CHECK`;}
+    const quote=chooseQuoteForStage(quoteStage,quoteBank);
     const latestLabel=DAILY_RATINGS.find(rating=>rating.value===latestRating)?.label;
     const detail=`${todaySessionCount?`Today: ${fmtSessionDuration(todayMinutes)}`:'No sessions today'} · Week: ${activeDays} days / ${fmtSessionDuration(recentMinutes)} · Syllabus: ${syllabusPct}% ${syllabusStage} · ${latestLabel?`Review: ${latestLabel}`:'No review this week'}.`;
     return {mode,label:profile.label,headline:profile.headline,quote,quoteCue,sidebar:profile.sidebar,detail};
+  }
+  function chooseQuoteForStage(stage,quotes) {
+    if(stage===activeQuoteStage)return activeQuote;
+    if(!quotes.length)return '';
+    const choices=quotes.length>1?quotes.filter(quote=>quote!==activeQuote):quotes;
+    activeQuote=choices[Math.floor(Math.random()*choices.length)];
+    activeQuoteStage=stage;
+    return activeQuote;
   }
   function updatePrepTheme() {
     const climate=prepClimate();
@@ -458,7 +468,7 @@
     if(pending)window.clearTimeout(pending);
     if(element.textContent===text){element.classList.remove('quote-fade-out');quoteTransitionTimers.delete(element);return;}
     element.classList.add('quote-fade-out');
-    quoteTransitionTimers.set(element,window.setTimeout(()=>{element.textContent=text;element.classList.remove('quote-fade-out');quoteTransitionTimers.delete(element);},190));
+    quoteTransitionTimers.set(element,window.setTimeout(()=>{element.textContent=text;element.classList.remove('quote-fade-out');quoteTransitionTimers.delete(element);},220));
   }
   function levelBars(courseId, stats) {
     return `<div class="level-bars">${['L1','L2','L3'].map((level,i)=>`<div class="level-item"><div class="level-bar-label"><span>${level}</span><b data-course-progress="${courseId}" data-level="${i}">${stats.levelPct[i]}%</b></div><div class="bar-track"><div class="bar-fill" data-course-bar="${courseId}" data-level="${i}" style="width:${stats.levelPct[i]}%"></div></div></div>`).join('')}</div>`;
