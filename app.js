@@ -14,6 +14,7 @@
   ];
   const content = document.getElementById('content');
   const state = loadState();
+  const TOTAL_SYLLABUS_TOPICS = Object.values(window.SYLLABI).reduce((sum,course)=>sum+course.chapters.reduce((count,chapter)=>count+chapter.topics.length,0),0);
   const cloudConfig = window.SUPABASE_CONFIG || {};
   const cloudBase = String(cloudConfig.url || '').trim().replace(/\/+$/, '');
   const cloudKey = String(cloudConfig.publishableKey || '').trim();
@@ -31,6 +32,7 @@
   let activeCourse = 'gate';
   let calendarMonth = new Date();
   let calendarSelectedDate = localKey(new Date());
+  let prepThemeDate = localKey(new Date());
   let syllabusFilter = 'All sections';
   let showAllSessions = false;
   let wheelRotation = 0;
@@ -319,6 +321,7 @@
   }
   function saveState() {
     if (pendingCloudChoice) pendingCloudChoice.local=copyStudyData(state);
+    updatePrepTheme();
     if (cloudUser && !applyingCloudData && !pendingCloudChoice && cloudAutoSyncReady()) {
       state.cloudUserId = cloudUser.id;
       state.cloudDirty = true;
@@ -392,6 +395,46 @@
     for(let i=6;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);const key=localKey(d);days.push({key,date:d,minutes:minutesFor(key)});}
     return days;
   }
+  function prepClimate() {
+    const today=localKey(new Date()),recentStart=new Date(),previousStart=new Date();
+    recentStart.setDate(recentStart.getDate()-6);previousStart.setDate(previousStart.getDate()-13);
+    const recentStartKey=localKey(recentStart),previousStartKey=localKey(previousStart),minutesByDay=new Map();
+    state.sessions.forEach(session=>{if(typeof session.date==='string'&&session.date>=previousStartKey&&session.date<=today)minutesByDay.set(session.date,(minutesByDay.get(session.date)||0)+(Number(session.minutes)||0));});
+    const daysFor=(startOffset,endOffset)=>Array.from({length:endOffset-startOffset+1},(_,index)=>{const date=new Date();date.setDate(date.getDate()-(endOffset-index));const key=localKey(date);return {key,minutes:minutesByDay.get(key)||0};});
+    const recentDays=daysFor(0,6),previousDays=daysFor(7,13),recentMinutes=recentDays.reduce((sum,day)=>sum+day.minutes,0),activeDays=recentDays.filter(day=>day.minutes>0).length;
+    const previousMinutes=previousDays.reduce((sum,day)=>sum+day.minutes,0);
+    const recentRatings=Object.entries(state.dailyRatings||{}).filter(([date])=>date>=recentDays[0].key&&date<=today).sort(([a],[b])=>b.localeCompare(a));
+    const latestRating=recentRatings.length?recentRatings[0][1].rating:'';
+    const completedLevels=Object.values(state.progress).reduce((sum,bits)=>sum+(Array.isArray(bits)?bits.filter(Boolean).length:0),0);
+    const syllabusPct=TOTAL_SYLLABUS_TOPICS?Math.round(Math.min(completedLevels,TOTAL_SYLLABUS_TOPICS*3)/(TOTAL_SYLLABUS_TOPICS*3)*100):0;
+    let mode;
+    if(latestRating==='satisfied')mode='momentum';
+    else if(latestRating==='bad')mode='reset';
+    else if(latestRating==='average')mode='steady';
+    else if(activeDays>=4&&recentMinutes>=180&&(previousMinutes===0||recentMinutes>=previousMinutes*.8))mode='momentum';
+    else if(activeDays>=3&&recentMinutes>=240&&recentMinutes>previousMinutes*1.15)mode='momentum';
+    else if(activeDays===0&&previousMinutes>=120)mode='reset';
+    else if(activeDays>0||syllabusPct>0)mode='steady';
+    else mode='starting';
+    const messages={
+      momentum:{label:'MOMENTUM / SIGNALS ARE STRONG',headline:'Your preparation is gathering pace.',sidebar:'Momentum is building.',quotes:['The effort you repeat becomes confidence you can carry into the exam.','Small focused sessions are becoming a rhythm you can trust.','You are turning today’s work into tomorrow’s recall.']},
+      steady:{label:'STEADY / KEEP BUILDING',headline:'Keep building, one block at a time.',sidebar:'Steady preparation.',quotes:['Consistency is a return to the work, not a perfect streak.','Progress compounds in the ordinary sessions you keep showing up for.','A steady plan is built from focused blocks you can repeat.']},
+      reset:{label:'RESET / TAKE THE NEXT STEP GENTLY',headline:'Give yourself a clean next step.',sidebar:'A gentler reset.',quotes:['A difficult day is a signal to adjust, not a verdict on your preparation.','Start smaller today; let momentum grow from there.','One focused block is enough to begin again.']},
+      starting:{label:'FIRST SIGNAL / YOUR PREP CLIMATE IS STARTING',headline:'Start with one intentional block.',sidebar:'First signals.',quotes:['Your next focused block is where the story begins.','Start with one topic. Let the next hour follow.','A useful study day can begin with twenty focused minutes.']}
+    }[mode];
+    const seed=`${today}:${mode}`.split('').reduce((hash,char)=>(hash*31+char.charCodeAt(0))>>>0,7);
+    const latestLabel=DAILY_RATINGS.find(rating=>rating.value===latestRating)?.label;
+    const detail=latestLabel?`Latest Daily Review: ${latestLabel.toLowerCase()} · ${activeDays} study days · ${fmtSessionDuration(recentMinutes)} logged · ${syllabusPct}% syllabus complete.`:mode==='starting'?`No recent study sessions or ratings yet · ${syllabusPct}% syllabus complete. Log a session or rate a day to personalize your prep climate.`:mode==='reset'?`A quieter 7 days after ${fmtSessionDuration(previousMinutes)} logged the week before · ${syllabusPct}% syllabus complete.`:`Last 7 days: ${activeDays} study days · ${fmtSessionDuration(recentMinutes)} logged · ${syllabusPct}% syllabus complete.`;
+    return {mode,label:messages.label,headline:messages.headline,quote:messages.quotes[seed%messages.quotes.length],sidebar:messages.sidebar,detail};
+  }
+  function updatePrepTheme() {
+    const climate=prepClimate();
+    document.documentElement.dataset.prepMood=climate.mode;
+    const motto=document.getElementById('prep-motto-line'),mottoDetail=document.getElementById('prep-motto-quote');
+    if(motto)motto.textContent=climate.sidebar;
+    if(mottoDetail)mottoDetail.textContent=climate.quote;
+    return climate;
+  }
   function levelBars(courseId, stats) {
     return `<div class="level-bars">${['L1','L2','L3'].map((level,i)=>`<div class="level-item"><div class="level-bar-label"><span>${level}</span><b data-course-progress="${courseId}" data-level="${i}">${stats.levelPct[i]}%</b></div><div class="bar-track"><div class="bar-fill" data-course-bar="${courseId}" data-level="${i}" style="width:${stats.levelPct[i]}%"></div></div></div>`).join('')}</div>`;
   }
@@ -418,12 +461,12 @@
     const course=window.SYLLABI[courseId], stats=getStats(courseId);
     return `<article class="course-progress"><div class="course-progress-top"><div class="course-id"><span class="exam-sigil ${courseId==='gate'?'gate-sigil':'ese-sigil'}">${course.sigil}</span><span><b>${esc(course.short)}</b><small>${courseId==='gate'?'Electronics & Communication':'Prelims · E&T'}</small></span></div><span class="course-total" data-course-total="${courseId}">${stats.totalPct}% total</span></div>${levelBars(courseId,stats)}</article>`;
   }
-  function renderOverview() {
+  function renderOverview(climate=prepClimate()) {
     const stats=allStats(); const today=minutesFor(localKey(new Date()));
     const fullyDone=Object.keys(state.progress).filter(k=>state.progress[k]?.length===3&&state.progress[k].every(Boolean)).length;
     content.innerHTML=`
       <section class="hero-card">
-        <div class="hero-copy"><div class="hero-kicker">YOUR ENGINEERING PREP / FIELDNOTE 01</div><h1 class="hero-title">Build the signal.<br>Trust the repetition.</h1><p>Two exams, one steady system. Keep your syllabus honest and your study hours visible.</p><button class="btn" data-go="syllabus">Open syllabus tracker <span>↗</span></button></div>
+        <div class="hero-copy"><div class="hero-kicker">${climate.label}</div><h1 class="hero-title">${climate.headline}</h1><blockquote class="hero-quote">“${climate.quote}”</blockquote><p class="prep-reason">${climate.detail}</p><button class="btn" data-go="syllabus">Open syllabus tracker <span>↗</span></button></div>
         <div class="hero-visual"><div class="hero-radar"><span class="radar-cross"></span><span class="radar-h"></span><span class="radar-sweep"></span><span class="radar-point"></span><span class="radar-label one">FOCUS / 01</span><span class="radar-label two">REPEAT / 03</span></div></div>
       </section>
       <section class="countdown-section"><div class="panel-heading"><div><h2>Exam countdowns</h2><p>Stay close to the dates that matter.</p></div><span class="countdown-mark">2027 / TARGETS</span></div><div class="countdown-grid">${renderCountdownCard('gate')}${renderCountdownCard('ese')}</div><details class="countdown-settings"><summary>Adjust countdown dates</summary><form id="exam-dates-form"><label><span class="field-label">GATE EC TARGET DATE</span><input class="input" type="date" name="gateDate" value="${esc(state.examDates.gate)}" required><small>Default is the first GATE 2027 exam-window day. Change this to your EC slot when its timetable is published.</small></label><label><span class="field-label">UPSC ESE PRELIMS DATE</span><input class="input" type="date" name="eseDate" value="${esc(state.examDates.ese)}" required><small>Default uses the official UPSC ESE Preliminary date.</small></label><button class="btn btn-primary" type="submit">Save countdown dates</button></form></details></section>
@@ -556,11 +599,12 @@
       <article class="panel calendar-rating-panel"><div class="panel-heading"><div><h2>Rate your day</h2><p>Choose one rating for the selected date.</p></div></div><div class="calendar-selected-date">${selectedLabel}</div><div class="calendar-rating-options">${DAILY_RATINGS.map(rating=>`<button class="calendar-rating-choice ${rating.className} ${selected===rating.value?'is-active':''}" type="button" data-daily-rating="${rating.value}" aria-pressed="${selected===rating.value}" ${calendarSelectedDate?'':'disabled'}><span>${rating.mark}</span>${rating.label}</button>`).join('')}</div>${selected?'<button class="calendar-clear-rating" type="button" data-clear-daily-rating>Clear this day’s rating</button>':''}<p class="calendar-rating-hint">Unmarked days stay neutral. Future dates can’t be rated yet.</p></article></section>`;
   }
   function render() {
+    const climate=updatePrepTheme();
     document.querySelectorAll('.nav-link').forEach(btn=>btn.classList.toggle('active',btn.dataset.page===activePage));
     document.querySelectorAll('.exam-switch').forEach(btn=>btn.classList.toggle('selected',btn.dataset.course===activeCourse));
     const names={overview:'OVERVIEW',syllabus:'SYLLABUS TRACKER',hours:'STUDY HOURS',wheel:'TOPIC ROULETTE',calendar:'DAILY REVIEW'};
     document.getElementById('crumb-current').textContent=names[activePage];
-    if(activePage==='overview')renderOverview();
+    if(activePage==='overview')renderOverview(climate);
     if(activePage==='syllabus')renderSyllabus();
     if(activePage==='hours')renderHours();
     if(activePage==='wheel')renderWheel();
@@ -727,5 +771,5 @@
   setAuthMode('signin');
   render();
   initializeCloudSession();
-  setInterval(()=>{const face=document.getElementById('timer-face');if(face&&state.timer)face.textContent=timerText();updateCountdownClocks();},1000);
+  setInterval(()=>{const face=document.getElementById('timer-face');if(face&&state.timer)face.textContent=timerText();updateCountdownClocks();const today=localKey(new Date());if(today!==prepThemeDate){prepThemeDate=today;const climate=updatePrepTheme();if(activePage==='overview')renderOverview(climate);}},1000);
 })();
