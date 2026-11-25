@@ -12,6 +12,18 @@
     { value:'average', label:'Average', className:'rating-average', mark:'~' },
     { value:'bad', label:'Very bad', className:'rating-bad', mark:'!' }
   ];
+  const PREP_THEMES = {
+    starting:{label:'LAUNCH / BUILD YOUR FIRST SIGNAL',headline:'Start with one clear, useful block.',sidebar:'Launch sequence.',quietQuotes:['Start with the next clear idea, not the whole syllabus.','Twenty attentive minutes can break the inertia.','Pick one concept; solve one question before switching.','Small beginnings are still forward motion.','Make the first block easy to start and clear to finish.','Today can be a restart without a grand plan.']},
+    building:{label:'FOUNDATIONS / STEADY WORK IS TAKING ROOT',headline:'Your repeatable study days are building strength.',sidebar:'Foundations in motion.',quietQuotes:['Return to weak topics before adding more breadth.','One solved question is stronger evidence than one more read.','Close each block by writing what you can recall unaided.','Build links between circuits, signals, and systems as you revise.','Keep the schedule steady; let recall do the measuring.','Small, repeatable blocks are turning into real coverage.']},
+    surge:{label:'MOMENTUM / YOUR RECENT RHYTHM IS RISING',headline:'Your study rhythm is gaining speed.',sidebar:'Momentum is building.',quietQuotes:['Use momentum to finish a timed set and review every miss.','Today’s consistency is strengthening recall.','Keep accuracy visible; speed follows understanding.','Protect the quality of your rhythm, not just the hours.','Use retrieval practice instead of another passive reread.','Stop a block while you can still name what you learned.']},
+    mastery:{label:'CONSOLIDATION / TURN COVERAGE INTO COMMAND',headline:'You’re turning syllabus coverage into exam readiness.',sidebar:'Practice into mastery.',quietQuotes:['Try mixed timed practice to make recall work across topics.','Record why each wrong answer was tempting.','Link formulas to the assumptions behind them.','Review the error log; named traps lose their power.','Rotate subjects to test what you can recall under pressure.','Explain a completed topic from memory before opening your notes.']},
+    checkpoint:{label:'CHECKPOINT / STRENGTHEN THE MIDDLE',headline:'Audit your gaps while the syllabus is taking shape.',sidebar:'Checkpoint reached.',quietQuotes:['Halfway through the syllabus: schedule revision beside new topics.','Audit your weakest chapters before the next mock.','A mixed quiz can reveal gaps chapter-wise study may hide.','Turn checkmarks into recall: close notes and teach the concept.','Track errors by cause—concept, calculation, or time pressure.','Use this week to deepen the weakest band.']},
+    'final-stretch':{label:'FINAL STRETCH / SHARPEN WHAT YOU KNOW',headline:'The syllabus is in view; sharpen recall now.',sidebar:'Final stretch.',quietQuotes:['Prioritize recall, mocks, and error correction near the finish.','Don’t chase a new chapter if revision protects more marks.','Review formulas and conditions, not just formula sheets.','Simulate the exam, then review every mistake carefully.','Protect sleep and attention as the exam approaches.','Revisit the topics you once found hardest.','Confidence comes from recall under a clock.']},
+    recovery:{label:'RESET / RECOVER, THEN RETURN',headline:'Reset your pace and protect the next block.',sidebar:'Recover and return.',quietQuotes:['Make the next block smaller, clearer, and kinder.','A rough week can turn with one manageable restart.','If attention has gone, take a real pause; tired study is not a badge.','A rating is feedback about the plan, not a verdict on you.','Return to one useful topic, then rebuild from there.','Rest, refuel, and move before choosing your next step.','Reset the desk and the goal: one question, then reassess.']}
+  };
+  const FIRST_BLOCK_QUOTES = ['Start with one question you can finish, then build from its result.','Choose one topic and write a clear finish line for this block.','Begin with recall: list what you already know before opening notes.','Settle in, silence distractions, and give this topic your full attention.','One focused block is enough to make today feel different.','Start where the last session left a question unanswered.'];
+  const FOCUS_HOUR_QUOTES = ['One hour in: summarize the topic without looking at your notes.','Solve first, then check the worked example and explain the gap.','Switch the mode now: retrieve, calculate, and explain.','Mark the question you missed; error review is the next gain.','Before changing topics, write three takeaways from memory.','Keep the next block focused on one target and one clean finish.','Work one timed problem, then review why each step works.','Stay with one question long enough to understand the snag.','At the end of this hour, note one gap to revisit.','Use this block to test recall instead of adding more pages.','Change subjects only after you can explain this topic unaided.','A precise goal will make the next hour count.'];
+  const BREAK_QUOTES = ['Two focused hours: stand, drink water, and take 5–10 minutes away from your screen.','Four hours logged: take a proper 15–20 minute break before another block.','Six hours is a long study day. Refuel, stretch, and consider winding down.','Pause the timer and give your eyes a screen-free break.','Take a brief walk; movement can make the next block feel clearer.','Refuel before a timed set, then return only if your attention feels fresh.','Use the break to move and rest, not to scroll through another feed.','If focus is fading, call today’s study complete and rest.','Step away for lunch; a rested mind can make the afternoon block sharper.','After a long stretch, take a screen-free pause and reset your posture.','Check in with your energy before deciding to start another block.','A full study day needs recovery too; close the books when focus is gone.'];
   const content = document.getElementById('content');
   const state = loadState();
   const TOTAL_SYLLABUS_TOPICS = Object.values(window.SYLLABI).reduce((sum,course)=>sum+course.chapters.reduce((count,chapter)=>count+chapter.topics.length,0),0);
@@ -398,34 +410,38 @@
   function prepClimate() {
     const today=localKey(new Date()),recentStart=new Date(),previousStart=new Date();
     recentStart.setDate(recentStart.getDate()-6);previousStart.setDate(previousStart.getDate()-13);
-    const recentStartKey=localKey(recentStart),previousStartKey=localKey(previousStart),minutesByDay=new Map();
-    state.sessions.forEach(session=>{if(typeof session.date==='string'&&session.date>=previousStartKey&&session.date<=today)minutesByDay.set(session.date,(minutesByDay.get(session.date)||0)+(Number(session.minutes)||0));});
+    const recentStartKey=localKey(recentStart),previousStartKey=localKey(previousStart),minutesByDay=new Map();let todaySessionCount=0,todayMinutes=0;
+    state.sessions.forEach(session=>{if(typeof session.date!=='string'||session.date<previousStartKey||session.date>today)return;const minutes=Number(session.minutes)||0;minutesByDay.set(session.date,(minutesByDay.get(session.date)||0)+minutes);if(session.date===today){todaySessionCount++;todayMinutes+=minutes;}});
     const daysFor=(startOffset,endOffset)=>Array.from({length:endOffset-startOffset+1},(_,index)=>{const date=new Date();date.setDate(date.getDate()-(endOffset-index));const key=localKey(date);return {key,minutes:minutesByDay.get(key)||0};});
     const recentDays=daysFor(0,6),previousDays=daysFor(7,13),recentMinutes=recentDays.reduce((sum,day)=>sum+day.minutes,0),activeDays=recentDays.filter(day=>day.minutes>0).length;
     const previousMinutes=previousDays.reduce((sum,day)=>sum+day.minutes,0);
     const recentRatings=Object.entries(state.dailyRatings||{}).filter(([date])=>date>=recentDays[0].key&&date<=today).sort(([a],[b])=>b.localeCompare(a));
     const latestRating=recentRatings.length?recentRatings[0][1].rating:'';
+    let ratingTotal=0,ratingWeight=0;
+    recentRatings.forEach(([date,entry])=>{const dayIndex=recentDays.findIndex(day=>day.key===date),weight=dayIndex+1;ratingTotal+=(entry.rating==='satisfied'?1:entry.rating==='bad'?-1:0)*weight;ratingWeight+=weight;});
+    const ratingBalance=ratingWeight?ratingTotal/ratingWeight:0;
     const completedLevels=Object.values(state.progress).reduce((sum,bits)=>sum+(Array.isArray(bits)?bits.filter(Boolean).length:0),0);
     const syllabusPct=TOTAL_SYLLABUS_TOPICS?Math.round(Math.min(completedLevels,TOTAL_SYLLABUS_TOPICS*3)/(TOTAL_SYLLABUS_TOPICS*3)*100):0;
+    const syllabusStage=syllabusPct<20?'Foundations':syllabusPct<50?'Building':syllabusPct<80?'Consolidating':'Final review';
+    const objectiveMomentum=(activeDays>=4&&recentMinutes>=180&&(previousMinutes===0||recentMinutes>=previousMinutes*.8))||(activeDays>=3&&recentMinutes>=240&&recentMinutes>previousMinutes*1.15);
+    const goodMomentum=objectiveMomentum||(activeDays>=3&&recentMinutes>=120&&ratingBalance>=.25);
+    const needsRecovery=latestRating==='bad'||ratingBalance<=-.3||(activeDays===0&&previousMinutes>=120);
     let mode;
-    if(latestRating==='satisfied')mode='momentum';
-    else if(latestRating==='bad')mode='reset';
-    else if(latestRating==='average')mode='steady';
-    else if(activeDays>=4&&recentMinutes>=180&&(previousMinutes===0||recentMinutes>=previousMinutes*.8))mode='momentum';
-    else if(activeDays>=3&&recentMinutes>=240&&recentMinutes>previousMinutes*1.15)mode='momentum';
-    else if(activeDays===0&&previousMinutes>=120)mode='reset';
-    else if(activeDays>0||syllabusPct>0)mode='steady';
+    if(needsRecovery)mode='recovery';
+    else if(syllabusPct>=80)mode='final-stretch';
+    else if(goodMomentum&&syllabusPct>=50)mode='mastery';
+    else if(goodMomentum)mode='surge';
+    else if(syllabusPct>=50)mode='checkpoint';
+    else if(activeDays>0||syllabusPct>0||latestRating==='satisfied'||latestRating==='average')mode='building';
     else mode='starting';
-    const messages={
-      momentum:{label:'MOMENTUM / SIGNALS ARE STRONG',headline:'Your preparation is gathering pace.',sidebar:'Momentum is building.',quotes:['The effort you repeat becomes confidence you can carry into the exam.','Small focused sessions are becoming a rhythm you can trust.','You are turning today’s work into tomorrow’s recall.']},
-      steady:{label:'STEADY / KEEP BUILDING',headline:'Keep building, one block at a time.',sidebar:'Steady preparation.',quotes:['Consistency is a return to the work, not a perfect streak.','Progress compounds in the ordinary sessions you keep showing up for.','A steady plan is built from focused blocks you can repeat.']},
-      reset:{label:'RESET / TAKE THE NEXT STEP GENTLY',headline:'Give yourself a clean next step.',sidebar:'A gentler reset.',quotes:['A difficult day is a signal to adjust, not a verdict on your preparation.','Start smaller today; let momentum grow from there.','One focused block is enough to begin again.']},
-      starting:{label:'FIRST SIGNAL / YOUR PREP CLIMATE IS STARTING',headline:'Start with one intentional block.',sidebar:'First signals.',quotes:['Your next focused block is where the story begins.','Start with one topic. Let the next hour follow.','A useful study day can begin with twenty focused minutes.']}
-    }[mode];
-    const seed=`${today}:${mode}`.split('').reduce((hash,char)=>(hash*31+char.charCodeAt(0))>>>0,7);
+    const profile=PREP_THEMES[mode],seed=`${today}:${mode}`.split('').reduce((hash,char)=>(hash*31+char.charCodeAt(0))>>>0,7);
+    const todayHours=Math.floor(todayMinutes/60);let quote=profile.quietQuotes[seed%profile.quietQuotes.length],quoteCue='RECENT PREP / 7-DAY REFLECTION';
+    if(todaySessionCount&&todayHours===0){quote=FIRST_BLOCK_QUOTES[seed%FIRST_BLOCK_QUOTES.length];quoteCue='TODAY / FIRST BLOCK';}
+    else if(todaySessionCount&&todayHours>0&&todayHours%2===0){quote=BREAK_QUOTES[(seed+todayHours/2-1)%BREAK_QUOTES.length];quoteCue=`${todayHours} HOURS / BREAK CHECK`;}
+    else if(todaySessionCount&&todayHours>0){quote=FOCUS_HOUR_QUOTES[(seed+Math.floor((todayHours-1)/2))%FOCUS_HOUR_QUOTES.length];quoteCue=`${todayHours} ${todayHours===1?'HOUR':'HOURS'} / FOCUS CHECK`;}
     const latestLabel=DAILY_RATINGS.find(rating=>rating.value===latestRating)?.label;
-    const detail=latestLabel?`Latest Daily Review: ${latestLabel.toLowerCase()} · ${activeDays} study days · ${fmtSessionDuration(recentMinutes)} logged · ${syllabusPct}% syllabus complete.`:mode==='starting'?`No recent study sessions or ratings yet · ${syllabusPct}% syllabus complete. Log a session or rate a day to personalize your prep climate.`:mode==='reset'?`A quieter 7 days after ${fmtSessionDuration(previousMinutes)} logged the week before · ${syllabusPct}% syllabus complete.`:`Last 7 days: ${activeDays} study days · ${fmtSessionDuration(recentMinutes)} logged · ${syllabusPct}% syllabus complete.`;
-    return {mode,label:messages.label,headline:messages.headline,quote:messages.quotes[seed%messages.quotes.length],sidebar:messages.sidebar,detail};
+    const detail=`${todaySessionCount?`Today: ${fmtSessionDuration(todayMinutes)}`:'No sessions today'} · Week: ${activeDays} days / ${fmtSessionDuration(recentMinutes)} · Syllabus: ${syllabusPct}% ${syllabusStage} · ${latestLabel?`Review: ${latestLabel}`:'No review this week'}.`;
+    return {mode,label:profile.label,headline:profile.headline,quote,quoteCue,sidebar:profile.sidebar,detail};
   }
   function updatePrepTheme() {
     const climate=prepClimate();
@@ -466,7 +482,7 @@
     const fullyDone=Object.keys(state.progress).filter(k=>state.progress[k]?.length===3&&state.progress[k].every(Boolean)).length;
     content.innerHTML=`
       <section class="hero-card">
-        <div class="hero-copy"><div class="hero-kicker">${climate.label}</div><h1 class="hero-title">${climate.headline}</h1><blockquote class="hero-quote">“${climate.quote}”</blockquote><p class="prep-reason">${climate.detail}</p><button class="btn" data-go="syllabus">Open syllabus tracker <span>↗</span></button></div>
+        <div class="hero-copy"><div class="hero-kicker">${climate.label}</div><h1 class="hero-title">${climate.headline}</h1><div class="quote-cue">${climate.quoteCue}</div><blockquote class="hero-quote">“${climate.quote}”</blockquote><p class="prep-reason">${climate.detail}</p><button class="btn" data-go="syllabus">Open syllabus tracker <span>↗</span></button></div>
         <div class="hero-visual"><div class="hero-radar"><span class="radar-cross"></span><span class="radar-h"></span><span class="radar-sweep"></span><span class="radar-point"></span><span class="radar-label one">FOCUS / 01</span><span class="radar-label two">REPEAT / 03</span></div></div>
       </section>
       <section class="countdown-section"><div class="panel-heading"><div><h2>Exam countdowns</h2><p>Stay close to the dates that matter.</p></div><span class="countdown-mark">2027 / TARGETS</span></div><div class="countdown-grid">${renderCountdownCard('gate')}${renderCountdownCard('ese')}</div><details class="countdown-settings"><summary>Adjust countdown dates</summary><form id="exam-dates-form"><label><span class="field-label">GATE EC TARGET DATE</span><input class="input" type="date" name="gateDate" value="${esc(state.examDates.gate)}" required><small>Default is the first GATE 2027 exam-window day. Change this to your EC slot when its timetable is published.</small></label><label><span class="field-label">UPSC ESE PRELIMS DATE</span><input class="input" type="date" name="eseDate" value="${esc(state.examDates.ese)}" required><small>Default uses the official UPSC ESE Preliminary date.</small></label><button class="btn btn-primary" type="submit">Save countdown dates</button></form></details></section>
