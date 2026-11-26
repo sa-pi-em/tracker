@@ -2,6 +2,7 @@
   'use strict';
   const STORE_KEY = 'fieldnote-engineering-prep-v1';
   const CLOUD_AUTH_KEY = 'fieldnote-supabase-session-v1';
+  const MAX_SAVED_SESSIONS = 10000;
   const DEFAULT_EXAM_DATES = { gate:'2027-02-06', ese:'2027-01-31' };
   const DEFAULT_WHEEL = [
     'Kirchhoff’s laws', 'Fourier transforms', 'MOSFET circuits', 'Control-system stability',
@@ -57,16 +58,19 @@
   function loadState() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-      return {
+      const sessionHistory=pruneSessionHistory(saved.sessions);
+      const loaded={
         progress: saved.progress && typeof saved.progress === 'object' ? saved.progress : {},
-        sessions: Array.isArray(saved.sessions) ? saved.sessions : [],
+        sessions: sessionHistory.sessions,
         timer: saved.timer && Number.isFinite(saved.timer.startedAt) ? saved.timer : null,
         wheelTopics: Array.isArray(saved.wheelTopics) ? saved.wheelTopics.filter(x => typeof x === 'string') : DEFAULT_WHEEL.slice(),
         examDates: { ...DEFAULT_EXAM_DATES, ...(saved.examDates && typeof saved.examDates === 'object' ? saved.examDates : {}) },
         dailyRatings: sanitizeDailyRatings(saved.dailyRatings),
         cloudUserId: typeof saved.cloudUserId === 'string' ? saved.cloudUserId : '',
-        cloudDirty: saved.cloudDirty === true
+        cloudDirty: saved.cloudDirty === true || (sessionHistory.removed>0&&!!saved.cloudUserId)
       };
+      if(sessionHistory.removed){try{localStorage.setItem(STORE_KEY,JSON.stringify(loaded));}catch(_){}}
+      return loaded;
     } catch (_) {
       return { progress: {}, sessions: [], timer: null, wheelTopics: DEFAULT_WHEEL.slice(), examDates: { ...DEFAULT_EXAM_DATES }, dailyRatings: {} };
     }
@@ -158,7 +162,7 @@
     return responseData(response);
   }
   function cloudSnapshot(source=state) {
-    return {progress:source.progress||{},sessions:source.sessions||[],timer:source.timer||null,wheelTopics:source.wheelTopics||[],examDates:source.examDates||{...DEFAULT_EXAM_DATES},dailyRatings:sanitizeDailyRatings(source.dailyRatings)};
+    return {progress:source.progress||{},sessions:pruneSessionHistory(source.sessions).sessions,timer:source.timer||null,wheelTopics:source.wheelTopics||[],examDates:source.examDates||{...DEFAULT_EXAM_DATES},dailyRatings:sanitizeDailyRatings(source.dailyRatings)};
   }
   function hasStudyData(source) {
     const dates=source.examDates||{};
@@ -191,17 +195,18 @@
     for(const [date,entry] of Object.entries(sanitizeDailyRatings(remote.dailyRatings))){
       if(!dailyRatings[date]||entry.updatedAt>=dailyRatings[date].updatedAt)dailyRatings[date]=entry;
     }
-    return {progress,sessions:[...sessions.values()],timer:local.timer||remote.timer||null,wheelTopics,examDates:{...local.examDates,...remote.examDates},dailyRatings};
+    return {progress,sessions:pruneSessionHistory([...sessions.values()]).sessions,timer:local.timer||remote.timer||null,wheelTopics,examDates:{...local.examDates,...remote.examDates},dailyRatings};
   }
   function applyCloudSnapshot(snapshot, userId, dirty=false) {
     applyingCloudData=true;
     state.progress=snapshot.progress&&typeof snapshot.progress==='object'?snapshot.progress:{};
-    state.sessions=Array.isArray(snapshot.sessions)?snapshot.sessions:[];
+    const sessionHistory=pruneSessionHistory(snapshot.sessions);
+    state.sessions=sessionHistory.sessions;
     state.timer=snapshot.timer&&Number.isFinite(snapshot.timer.startedAt)?snapshot.timer:null;
     state.wheelTopics=Array.isArray(snapshot.wheelTopics)?snapshot.wheelTopics:DEFAULT_WHEEL.slice();
     state.examDates={...DEFAULT_EXAM_DATES,...(snapshot.examDates||{})};
     state.dailyRatings=sanitizeDailyRatings(snapshot.dailyRatings);
-    state.cloudUserId=userId;state.cloudDirty=dirty;
+    state.cloudUserId=userId;state.cloudDirty=dirty||sessionHistory.removed>0;
     try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(_){}
     applyingCloudData=false;
   }
@@ -249,7 +254,8 @@
       await uploadCloudSnapshot(cloudSaveVersion);
     }else{
       applyCloudSnapshot(remote,cloudUser.id,false);
-      setCloudStatus('Cloud synced','connected');
+      if(state.cloudDirty)await uploadCloudSnapshot(cloudSaveVersion);
+      else setCloudStatus('Cloud synced','connected');
     }
     render();
     return true;
@@ -270,6 +276,7 @@
       if(choice==='account'){
         applyCloudSnapshot(pending.remote,cloudUser.id,false);
         setCloudStatus(pending.remoteExists?'Cloud synced':'Cloud connected','connected');
+        if(state.cloudDirty)await uploadCloudSnapshot(cloudSaveVersion);
         render();
       }else if(choice==='merge'){
         applyCloudSnapshot(mergeStudyData(pending.local,pending.remote),cloudUser.id,true);await uploadCloudSnapshot(cloudSaveVersion);render();
@@ -335,6 +342,8 @@
     finally{button.disabled=false;button.textContent='↻ Sync now';}
   }
   function saveState() {
+    const sessionHistory=pruneSessionHistory(state.sessions);
+    if(sessionHistory.removed){state.sessions=sessionHistory.sessions;if(state.cloudUserId)state.cloudDirty=true;}
     if (pendingCloudChoice) pendingCloudChoice.local=copyStudyData(state);
     updatePrepTheme();
     if (cloudUser && !applyingCloudData && !pendingCloudChoice && cloudAutoSyncReady()) {
@@ -359,6 +368,21 @@
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
   function dateFromKey(key) { const [y,m,d] = key.split('-').map(Number); return new Date(y,m-1,d,12); }
+  function sessionDateKey(session) {
+    if(/^\d{4}-\d{2}-\d{2}$/.test(String(session?.date||'')))return session.date;
+    const timestamp=Number(session?.startedAt)||Number(session?.createdAt);
+    return Number.isFinite(timestamp)&&timestamp>0?localKey(new Date(timestamp)):'';
+  }
+  function pruneSessionHistory(history) {
+    const source=Array.isArray(history)?history:[],now=new Date(),cutoffYear=now.getFullYear()-1,cutoffMonth=now.getMonth();
+    const cutoffDay=Math.min(now.getDate(),new Date(cutoffYear,cutoffMonth+1,0).getDate()),cutoffKey=localKey(new Date(cutoffYear,cutoffMonth,cutoffDay,12));
+    let retained=source.map((session,index)=>({session,index,dateKey:sessionDateKey(session)})).filter(entry=>!entry.dateKey||entry.dateKey>=cutoffKey);
+    if(retained.length>MAX_SAVED_SESSIONS){
+      const newest=retained.slice().sort((a,b)=>a.dateKey.localeCompare(b.dateKey)||(Number(a.session?.createdAt)||Number(a.session?.startedAt)||a.index)-(Number(b.session?.createdAt)||Number(b.session?.startedAt)||b.index)).slice(-MAX_SAVED_SESSIONS);
+      const keep=new Set(newest.map(entry=>entry.index));retained=retained.filter(entry=>keep.has(entry.index));
+    }
+    return {sessions:retained.map(entry=>entry.session),removed:source.length-retained.length};
+  }
   function prettyDate(date, options={weekday:'short', month:'short', day:'numeric'}) {
     return new Intl.DateTimeFormat('en-IN', options).format(date);
   }
@@ -585,7 +609,7 @@
     const sessionsToggle=state.sessions.length>12||showAllSessions?`<button class="session-view-toggle" type="button" data-toggle-sessions aria-expanded="${showAllSessions}">${showAllSessions?'Show latest 12':`View all ${state.sessions.length}`}</button>`:'';
     content.innerHTML=`<section class="page-head"><div><div class="eyebrow">STUDY LOG / DAILY RHYTHM</div><h1>Make the hours count.</h1><p>Track focused time across both exams. Use the timer for a live session or add hours you studied earlier.</p></div></section>
       <section class="stats-grid"><article class="stat-card"><div class="stat-label">TODAY <span class="stat-icon">◷</span></div><div class="stat-value">${fmtSessionDuration(today)}</div><div class="stat-note">Across all study tracks</div></article><article class="stat-card"><div class="stat-label">THIS WEEK <span class="stat-icon">▥</span></div><div class="stat-value">${fmtSessionDuration(weekDays().reduce((a,d)=>a+d.minutes,0))}</div><div class="stat-note">Last 7 calendar days</div></article><article class="stat-card"><div class="stat-label">ALL TIME <span class="stat-icon">↗</span></div><div class="stat-value">${fmtSessionDuration(totalMinutes())}</div><div class="stat-note">Total logged study time</div></article><article class="stat-card"><div class="stat-label">STREAK <span class="stat-icon">✳</span></div><div class="stat-value">${studyStreak()} <span style="font-size:13px;color:#8c9b97">days</span></div><div class="stat-note">Consecutive study days</div></article></section>
-      <section class="hours-layout"><div style="display:grid;gap:14px">${renderTimerPanel()}<article class="panel"><div class="panel-heading"><div><h2>Log a study block</h2><p>Add a session from your notebook or another timer.</p></div></div>${manualSessionForm()}</article><article class="panel"><div class="panel-heading"><div><h2>${showAllSessions?'All study sessions':'Recent sessions'}</h2><p>${showAllSessions?`Showing all ${state.sessions.length} saved entries.`:'Latest entries across your preparation.'}</p></div>${sessionsToggle}</div><div class="sessions-list">${renderSessions()}</div></article></div>
+      <section class="hours-layout"><div style="display:grid;gap:14px">${renderTimerPanel()}<article class="panel"><div class="panel-heading"><div><h2>Log a study block</h2><p>Add a session from your notebook or another timer.</p></div></div>${manualSessionForm()}</article><article class="panel"><div class="panel-heading"><div><h2>${showAllSessions?'All study sessions':'Recent sessions'}</h2><p>${showAllSessions?`Showing all ${state.sessions.length} saved entries.`:'Latest entries across your preparation.'} Auto-cleanup removes sessions older than a year and keeps up to 10,000.</p></div>${sessionsToggle}</div><div class="sessions-list">${renderSessions()}</div></article></div>
       <div style="display:grid;gap:14px"><article class="panel"><div class="panel-heading"><div><h2>Seven-day rhythm</h2><p>Daily study hours, most recent first</p></div></div>${renderStudyDays()}</article><article class="panel"><div class="panel-heading"><div><h2>Study by exam</h2><p>Logged time split across both tracks.</p></div></div>${['gate','ese'].map(id=>`<div class="study-day"><div class="study-day-head"><span>${esc(window.SYLLABI[id].short)}</span><b>${fmtHours(courseMinutes(id))}</b></div><div class="bar-track"><div class="bar-fill" style="width:${totalMinutes()?courseMinutes(id)/totalMinutes()*100:0}%"></div></div></div>`).join('')}</article></div></section>`;
   }
   function wheelOptions() {
@@ -806,5 +830,5 @@
   setAuthMode('signin');
   render();
   initializeCloudSession();
-  setInterval(()=>{const face=document.getElementById('timer-face');if(face&&state.timer)face.textContent=timerText();updateCountdownClocks();const today=localKey(new Date());if(today!==prepThemeDate){prepThemeDate=today;const climate=updatePrepTheme();if(activePage==='overview')renderOverview(climate);}},1000);
+  setInterval(()=>{const face=document.getElementById('timer-face');if(face&&state.timer)face.textContent=timerText();updateCountdownClocks();const today=localKey(new Date());if(today!==prepThemeDate){prepThemeDate=today;const sessionHistory=pruneSessionHistory(state.sessions);if(sessionHistory.removed){state.sessions=sessionHistory.sessions;saveState();if(activePage==='hours')renderHours();}const climate=updatePrepTheme();if(activePage==='overview')renderOverview(climate);}},1000);
 })();
