@@ -13,6 +13,7 @@
     { value:'average', label:'Average', className:'rating-average', mark:'~' },
     { value:'bad', label:'Very bad', className:'rating-bad', mark:'!' }
   ];
+  const CALENDAR_EVENT_TYPES = ['Exam','Interview','Mock test','Deadline','Personal','Other'];
   const PREP_THEMES = {
     starting:{label:'LAUNCH / BUILD YOUR FIRST SIGNAL',headline:'You’ve begun; the next step is already possible.',sidebar:'A beginning worth backing.',quietQuotes:['Showing up today is already a win.','You don’t need a perfect streak to make a strong comeback.','Every strong preparation began with a first step.','This start counts; keep showing up and progress will follow.','You’re building a future answer one quiet session at a time.','Your effort today is proof that you haven’t given up.','Every circuit begins with a first connection; yours starts today.','Your first step has more power than a perfect plan never started.','Every great signal begins as a small current.','A new day is another chance to build the result you want.','You’re proving that ambition can become action.','One connection at a time, your future is taking shape.']},
     building:{label:'FOUNDATIONS / STEADY WORK IS TAKING ROOT',headline:'Your repeatable study days are building strength.',sidebar:'Foundations in motion.',quietQuotes:['The days you return to your desk are shaping your result.','Your effort is becoming a rhythm, and rhythm becomes strength.','Every chapter you face makes the exam feel more familiar.','You’re further along than the version of you who first began.','Consistency is quietly turning work into confidence.','One day at a time, the syllabus is becoming yours.','You’re building a solid circuit: steady current, strong connections.','Every steady session adds another strong link to your chain.','You’re turning effort into a current that keeps moving.','Your consistency is building a stronger foundation than you think.','Each topic you finish makes the next one feel less distant.','Your preparation is starting to hold together like a well-built circuit.']},
@@ -66,13 +67,14 @@
         wheelTopics: Array.isArray(saved.wheelTopics) ? saved.wheelTopics.filter(x => typeof x === 'string') : DEFAULT_WHEEL.slice(),
         examDates: { ...DEFAULT_EXAM_DATES, ...(saved.examDates && typeof saved.examDates === 'object' ? saved.examDates : {}) },
         dailyRatings: sanitizeDailyRatings(saved.dailyRatings),
+        calendarEvents: sanitizeCalendarEvents(saved.calendarEvents),
         cloudUserId: typeof saved.cloudUserId === 'string' ? saved.cloudUserId : '',
         cloudDirty: saved.cloudDirty === true || (sessionHistory.removed>0&&!!saved.cloudUserId)
       };
       if(sessionHistory.removed){try{localStorage.setItem(STORE_KEY,JSON.stringify(loaded));}catch(_){}}
       return loaded;
     } catch (_) {
-      return { progress: {}, sessions: [], timer: null, wheelTopics: DEFAULT_WHEEL.slice(), examDates: { ...DEFAULT_EXAM_DATES }, dailyRatings: {} };
+      return { progress: {}, sessions: [], timer: null, wheelTopics: DEFAULT_WHEEL.slice(), examDates: { ...DEFAULT_EXAM_DATES }, dailyRatings: {}, calendarEvents: [] };
     }
   }
   function sanitizeDailyRatings(source) {
@@ -80,6 +82,22 @@
     return Object.fromEntries(Object.entries(source).filter(([date, entry]) =>
       /^\d{4}-\d{2}-\d{2}$/.test(date) && DAILY_RATINGS.some(rating => rating.value === entry?.rating)
     ).map(([date, entry]) => [date, { rating:entry.rating, updatedAt:Number.isFinite(entry.updatedAt)?entry.updatedAt:0 }]));
+  }
+  function isValidDateKey(date) {
+    return typeof date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(date)&&localKey(dateFromKey(date))===date;
+  }
+  function sanitizeCalendarEvents(source) {
+    if(!Array.isArray(source))return [];
+    const events=new Map();
+    source.forEach((event,index)=>{
+      if(!event||typeof event!=='object')return;
+      const title=String(event.title||'').trim().replace(/\s+/g,' ').slice(0,80),date=String(event.date||'');
+      if(!title||!isValidDateKey(date))return;
+      const timeValue=String(event.time||''),time=/^\d{2}:\d{2}$/.test(timeValue)&&Number(timeValue.slice(0,2))<24&&Number(timeValue.slice(3,5))<60?timeValue:'';
+      const id=typeof event.id==='string'&&event.id.trim()?event.id.trim().slice(0,120):`calendar-${date}-${Number(event.createdAt)||index}-${title}`;
+      events.set(id,{id,title,date,time,type:CALENDAR_EVENT_TYPES.includes(event.type)?event.type:'Other',note:String(event.note||'').trim().slice(0,200),createdAt:Number.isFinite(Number(event.createdAt))?Number(event.createdAt):0});
+    });
+    return [...events.values()];
   }
   function loadCloudAuth() {
     try { return JSON.parse(localStorage.getItem(CLOUD_AUTH_KEY) || 'null'); }
@@ -162,18 +180,18 @@
     return responseData(response);
   }
   function cloudSnapshot(source=state) {
-    return {progress:source.progress||{},sessions:pruneSessionHistory(source.sessions).sessions,timer:source.timer||null,wheelTopics:source.wheelTopics||[],examDates:source.examDates||{...DEFAULT_EXAM_DATES},dailyRatings:sanitizeDailyRatings(source.dailyRatings)};
+    return {progress:source.progress||{},sessions:pruneSessionHistory(source.sessions).sessions,timer:source.timer||null,wheelTopics:source.wheelTopics||[],examDates:source.examDates||{...DEFAULT_EXAM_DATES},dailyRatings:sanitizeDailyRatings(source.dailyRatings),calendarEvents:sanitizeCalendarEvents(source.calendarEvents)};
   }
   function hasStudyData(source) {
     const dates=source.examDates||{};
     const hasCustomDate=Object.keys(DEFAULT_EXAM_DATES).some(key=>dates[key]&&dates[key]!==DEFAULT_EXAM_DATES[key]);
     const hasCompletedLevels=Object.values(source.progress||{}).some(bits=>Array.isArray(bits)&&bits.some(Boolean));
-    return hasCompletedLevels||(source.sessions||[]).length>0||!!source.timer||Object.keys(source.dailyRatings||{}).length>0||hasCustomDate||
+    return hasCompletedLevels||(source.sessions||[]).length>0||!!source.timer||Object.keys(source.dailyRatings||{}).length>0||(source.calendarEvents||[]).length>0||hasCustomDate||
       JSON.stringify(source.wheelTopics||DEFAULT_WHEEL)!==JSON.stringify(DEFAULT_WHEEL);
   }
   function hasLocalStudyData() { return hasStudyData(state); }
   function copyStudyData(source) { return JSON.parse(JSON.stringify(cloudSnapshot(source))); }
-  function emptyStudyData() { return {progress:{},sessions:[],timer:null,wheelTopics:DEFAULT_WHEEL.slice(),examDates:{...DEFAULT_EXAM_DATES},dailyRatings:{}}; }
+  function emptyStudyData() { return {progress:{},sessions:[],timer:null,wheelTopics:DEFAULT_WHEEL.slice(),examDates:{...DEFAULT_EXAM_DATES},dailyRatings:{},calendarEvents:[]}; }
   function requestCloudDataChoice(remote, switchingAccounts=false, remoteExists=true) {
     pendingCloudChoice={local:copyStudyData(state),remote:copyStudyData(remote),userId:cloudUser.id,switchingAccounts,remoteExists,remoteHasData:hasStudyData(remote)};
     confirmingCloudReplace=false;setCloudStatus('Choose data','');updateCloudModal();document.getElementById('cloud-modal').hidden=false;
@@ -195,7 +213,9 @@
     for(const [date,entry] of Object.entries(sanitizeDailyRatings(remote.dailyRatings))){
       if(!dailyRatings[date]||entry.updatedAt>=dailyRatings[date].updatedAt)dailyRatings[date]=entry;
     }
-    return {progress,sessions:pruneSessionHistory([...sessions.values()]).sessions,timer:local.timer||remote.timer||null,wheelTopics,examDates:{...local.examDates,...remote.examDates},dailyRatings};
+    const calendarEvents=new Map();
+    [...sanitizeCalendarEvents(local.calendarEvents),...sanitizeCalendarEvents(remote.calendarEvents)].forEach(event=>calendarEvents.set(event.id,event));
+    return {progress,sessions:pruneSessionHistory([...sessions.values()]).sessions,timer:local.timer||remote.timer||null,wheelTopics,examDates:{...local.examDates,...remote.examDates},dailyRatings,calendarEvents:[...calendarEvents.values()]};
   }
   function applyCloudSnapshot(snapshot, userId, dirty=false) {
     applyingCloudData=true;
@@ -206,6 +226,7 @@
     state.wheelTopics=Array.isArray(snapshot.wheelTopics)?snapshot.wheelTopics:DEFAULT_WHEEL.slice();
     state.examDates={...DEFAULT_EXAM_DATES,...(snapshot.examDates||{})};
     state.dailyRatings=sanitizeDailyRatings(snapshot.dailyRatings);
+    state.calendarEvents=sanitizeCalendarEvents(snapshot.calendarEvents);
     state.cloudUserId=userId;state.cloudDirty=dirty||sessionHistory.removed>0;
     try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(_){}
     applyingCloudData=false;
@@ -368,6 +389,7 @@
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
   function dateFromKey(key) { const [y,m,d] = key.split('-').map(Number); return new Date(y,m-1,d,12); }
+  function dateOrdinal(key) { const [year,month,day]=key.split('-').map(Number);return Math.floor(Date.UTC(year,month-1,day)/86400000); }
   function sessionDateKey(session) {
     if(/^\d{4}-\d{2}-\d{2}$/.test(String(session?.date||'')))return session.date;
     const timestamp=Number(session?.startedAt)||Number(session?.createdAt);
@@ -643,25 +665,38 @@
   function renderCalendar() {
     const year=calendarMonth.getFullYear(),month=calendarMonth.getMonth(),firstDay=new Date(year,month,1).getDay();
     const daysInMonth=new Date(year,month+1,0).getDate(),cellCount=Math.ceil((firstDay+daysInMonth)/7)*7,today=localKey(new Date());
+    const eventsByDate=new Map();
+    (state.calendarEvents||[]).forEach(event=>{if(!eventsByDate.has(event.date))eventsByDate.set(event.date,[]);eventsByDate.get(event.date).push(event);});
     const cells=Array.from({length:cellCount},(_,index)=>{
       const day=index-firstDay+1;
       if(day<1||day>daysInMonth)return '<span class="calendar-empty" aria-hidden="true"></span>';
-      const key=localKey(new Date(year,month,day)),entry=state.dailyRatings[key],rating=DAILY_RATINGS.find(option=>option.value===entry?.rating);
+      const key=localKey(new Date(year,month,day)),entry=state.dailyRatings[key],rating=DAILY_RATINGS.find(option=>option.value===entry?.rating),dayEvents=eventsByDate.get(key)||[];
       const classes=['calendar-day',rating?.className,key===today?'is-today':'',key===calendarSelectedDate?'is-selected':''].filter(Boolean).join(' ');
-      const label=rating?rating.label:'Not rated';
-      return `<button class="${classes}" type="button" data-calendar-date="${key}" aria-label="${prettyDate(dateFromKey(key),{weekday:'long',month:'long',day:'numeric',year:'numeric'})}: ${label}" ${key>today?'disabled':''}><span>${day}</span>${rating?`<span class="calendar-day-mark" aria-hidden="true">${rating.mark}</span>`:''}</button>`;
+      const label=rating?rating.label:'Not rated',eventsLabel=dayEvents.length?`, ${dayEvents.length} event${dayEvents.length===1?'':'s'}: ${dayEvents.map(event=>esc(event.title)).join(', ')}`:'';
+      return `<button class="${classes}" type="button" data-calendar-date="${key}" aria-label="${prettyDate(dateFromKey(key),{weekday:'long',month:'long',day:'numeric',year:'numeric'})}: ${label}${eventsLabel}"><span>${day}</span><span class="calendar-day-marks">${rating?`<span class="calendar-day-mark" aria-hidden="true">${rating.mark}</span>`:''}${dayEvents.length?`<span class="calendar-event-mark" aria-label="${dayEvents.length} event${dayEvents.length===1?'':'s'}">${dayEvents.length}</span>`:''}</span></button>`;
     }).join('');
     const selected=calendarSelectedDate?state.dailyRatings[calendarSelectedDate]?.rating:'';
+    const selectedEvents=calendarSelectedDate?(eventsByDate.get(calendarSelectedDate)||[]):[];
     const selectedLabel=calendarSelectedDate?prettyDate(dateFromKey(calendarSelectedDate),{weekday:'long',month:'long',day:'numeric',year:'numeric'}):'Choose a day on the calendar';
-    content.innerHTML=`<section class="page-head"><div><div class="eyebrow">DAILY REVIEW / YOUR OWN CHECK-IN</div><h1>How did your day feel?</h1><p>Mark each day based on how satisfied you were with your work. You can change a rating anytime.</p></div></section>
-      <section class="calendar-layout"><article class="panel calendar-panel"><div class="calendar-month-header"><button class="calendar-month-arrow" type="button" data-calendar-month="-1" aria-label="Previous month">‹</button><h2>${prettyDate(new Date(year,month,1),{month:'long',year:'numeric'})}</h2><button class="calendar-month-arrow" type="button" data-calendar-month="1" aria-label="Next month">›</button></div><div class="calendar-weekdays">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day=>`<span>${day}</span>`).join('')}</div><div class="calendar-grid">${cells}</div><div class="calendar-legend">${DAILY_RATINGS.map(rating=>`<span><i class="${rating.className}"></i>${rating.label}</span>`).join('')}</div></article>
-      <article class="panel calendar-rating-panel"><div class="panel-heading"><div><h2>Rate your day</h2><p>Choose one rating for the selected date.</p></div></div><div class="calendar-selected-date">${selectedLabel}</div><div class="calendar-rating-options">${DAILY_RATINGS.map(rating=>`<button class="calendar-rating-choice ${rating.className} ${selected===rating.value?'is-active':''}" type="button" data-daily-rating="${rating.value}" aria-pressed="${selected===rating.value}" ${calendarSelectedDate?'':'disabled'}><span>${rating.mark}</span>${rating.label}</button>`).join('')}</div>${selected?'<button class="calendar-clear-rating" type="button" data-clear-daily-rating>Clear this day’s rating</button>':''}<p class="calendar-rating-hint">Unmarked days stay neutral. Future dates can’t be rated yet.</p></article></section>`;
+    const todayOrdinal=dateOrdinal(today);
+    const upcoming=(state.calendarEvents||[]).filter(event=>{const days=dateOrdinal(event.date)-todayOrdinal;return days>=0&&days<=7;}).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'99:99').localeCompare(b.time||'99:99')||a.title.localeCompare(b.title));
+    const upcomingMarkup=upcoming.length?upcoming.map(event=>{
+      const days=dateOrdinal(event.date)-todayOrdinal,when=days===0?'Today':days===1?'Tomorrow':`In ${days} days`;
+      return `<button class="upcoming-event" type="button" data-calendar-date="${event.date}"><span class="upcoming-event-date">${esc(when)}</span><span class="upcoming-event-main"><strong>${esc(event.title)}</strong><small>${esc(event.type)}${event.time?` · ${esc(event.time)}`:''}</small></span><span class="upcoming-event-day">${esc(prettyDate(dateFromKey(event.date),{month:'short',day:'numeric'}))} ›</span></button>`;
+    }).join(''):'<p class="upcoming-empty">Nothing scheduled in the next 7 days. Add an exam, interview, or milestone below.</p>';
+    const selectedEventsMarkup=selectedEvents.length?selectedEvents.map(event=>`<div class="calendar-event-row"><div class="calendar-event-copy"><strong>${esc(event.title)}</strong><small>${esc(event.type)}${event.time?` · ${esc(event.time)}`:''}${event.note?` · ${esc(event.note)}`:''}</small></div><button class="calendar-event-delete" type="button" data-delete-calendar-event="${esc(event.id)}" aria-label="Delete ${esc(event.title)}">Remove</button></div>`).join(''):'<p class="calendar-events-empty">No events on this date yet.</p>';
+    content.innerHTML=`<section class="page-head"><div><div class="eyebrow">CALENDAR / EXAMS / CHECK-INS</div><h1>Your calendar</h1><p>Keep exams, interviews, deadlines, and daily reviews in one place. Events are saved with your tracker data and sync with your account.</p></div></section>
+      <section class="panel upcoming-panel"><div class="panel-heading"><div><h2>Coming up</h2><p>Events scheduled from today through the next 7 days.</p></div><span class="upcoming-count">${upcoming.length} ${upcoming.length===1?'EVENT':'EVENTS'}</span></div><div class="upcoming-event-list">${upcomingMarkup}</div></section>
+      <section class="calendar-layout"><article class="panel calendar-panel"><div class="calendar-month-header"><button class="calendar-month-arrow" type="button" data-calendar-month="-1" aria-label="Previous month">‹</button><h2>${prettyDate(new Date(year,month,1),{month:'long',year:'numeric'})}</h2><button class="calendar-month-arrow" type="button" data-calendar-month="1" aria-label="Next month">›</button></div><div class="calendar-weekdays">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(day=>`<span>${day}</span>`).join('')}</div><div class="calendar-grid">${cells}</div><div class="calendar-legend">${DAILY_RATINGS.map(rating=>`<span><i class="${rating.className}"></i>${rating.label}</span>`).join('')}<span><i class="calendar-legend-event"></i>Event</span></div></article>
+      <article class="panel calendar-rating-panel"><div class="panel-heading"><div><h2>Daily review</h2><p>Rate your work on the selected date.</p></div></div><div class="calendar-selected-date">${selectedLabel}</div><div class="calendar-rating-options">${DAILY_RATINGS.map(rating=>`<button class="calendar-rating-choice ${rating.className} ${selected===rating.value?'is-active':''}" type="button" data-daily-rating="${rating.value}" aria-pressed="${selected===rating.value}" ${calendarSelectedDate&&calendarSelectedDate<=today?'':'disabled'}><span>${rating.mark}</span>${rating.label}</button>`).join('')}</div>${selected?'<button class="calendar-clear-rating" type="button" data-clear-daily-rating>Clear this day’s rating</button>':''}<p class="calendar-rating-hint">Unmarked days stay neutral. Future dates can’t be rated yet.</p>
+      <div class="calendar-events-heading"><div><h3>Events on this day</h3><p>${calendarSelectedDate?'Selected date':'Choose a date to view its events'}</p></div></div><div class="calendar-event-list">${selectedEventsMarkup}</div>
+      <form id="calendar-event-form" class="calendar-event-form"><div class="calendar-form-heading">ADD AN EVENT</div><label><span class="field-label">EVENT NAME</span><input class="input" name="title" maxlength="80" placeholder="e.g. ESE interview" required></label><div class="calendar-form-row"><label><span class="field-label">DATE</span><input class="input" type="date" name="date" value="${esc(calendarSelectedDate||today)}" required></label><label><span class="field-label">TYPE</span><select class="select-control full" name="type">${CALENDAR_EVENT_TYPES.map(type=>`<option>${type}</option>`).join('')}</select></label></div><div class="calendar-form-row"><label><span class="field-label">TIME · OPTIONAL</span><input class="input" type="time" name="time"></label><label><span class="field-label">NOTE · OPTIONAL</span><input class="input" name="note" maxlength="200" placeholder="Location, link, or detail"></label></div><button class="btn btn-primary" type="submit">＋ Add to calendar</button></form></article></section>`;
   }
   function render() {
     const climate=updatePrepTheme();
     document.querySelectorAll('.nav-link').forEach(btn=>btn.classList.toggle('active',btn.dataset.page===activePage));
     document.querySelectorAll('.exam-switch').forEach(btn=>btn.classList.toggle('selected',btn.dataset.course===activeCourse));
-    const names={overview:'OVERVIEW',syllabus:'SYLLABUS TRACKER',hours:'STUDY HOURS',wheel:'TOPIC ROULETTE',calendar:'DAILY REVIEW'};
+    const names={overview:'OVERVIEW',syllabus:'SYLLABUS TRACKER',hours:'STUDY HOURS',wheel:'TOPIC ROULETTE',calendar:'CALENDAR'};
     document.getElementById('crumb-current').textContent=names[activePage];
     if(activePage==='overview')renderOverview(climate);
     if(activePage==='syllabus')renderSyllabus();
@@ -732,7 +767,7 @@
       const parsed=JSON.parse(text);const incoming=parsed.state||parsed;
       if(!incoming.progress||typeof incoming.progress!=='object'||!Array.isArray(incoming.sessions)||!Array.isArray(incoming.wheelTopics))throw new Error('This file is not a Fieldnote backup.');
       state.progress=incoming.progress;state.sessions=incoming.sessions.filter(s=>s&&typeof s.date==='string'&&Number.isFinite(Number(s.minutes)));
-      state.timer=incoming.timer&&Number.isFinite(incoming.timer.startedAt)?incoming.timer:null;state.wheelTopics=incoming.wheelTopics.filter(t=>typeof t==='string');state.examDates={...DEFAULT_EXAM_DATES,...(incoming.examDates||{})};state.dailyRatings=sanitizeDailyRatings(incoming.dailyRatings);
+      state.timer=incoming.timer&&Number.isFinite(incoming.timer.startedAt)?incoming.timer:null;state.wheelTopics=incoming.wheelTopics.filter(t=>typeof t==='string');state.examDates={...DEFAULT_EXAM_DATES,...(incoming.examDates||{})};state.dailyRatings=sanitizeDailyRatings(incoming.dailyRatings);state.calendarEvents=sanitizeCalendarEvents(incoming.calendarEvents);
       saveState();toast('Backup restored on this device.');render();
     }).catch(()=>toast('Could not read that backup file.'));
   }
@@ -765,8 +800,9 @@
   content.addEventListener('click',e=>{
     const navBtn=e.target.closest('[data-go]');if(navBtn){nav(navBtn.dataset.go);return;}
     const monthButton=e.target.closest('[data-calendar-month]');if(monthButton){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+Number(monthButton.dataset.calendarMonth),1);calendarSelectedDate='';renderCalendar();return;}
-    const calendarDay=e.target.closest('[data-calendar-date]');if(calendarDay){calendarSelectedDate=calendarDay.dataset.calendarDate;renderCalendar();return;}
-    const ratingButton=e.target.closest('[data-daily-rating]');if(ratingButton&&calendarSelectedDate){state.dailyRatings[calendarSelectedDate]={rating:ratingButton.dataset.dailyRating,updatedAt:Date.now()};saveState();renderCalendar();return;}
+    const calendarDay=e.target.closest('[data-calendar-date]');if(calendarDay){calendarSelectedDate=calendarDay.dataset.calendarDate;const selectedDate=dateFromKey(calendarSelectedDate);calendarMonth=new Date(selectedDate.getFullYear(),selectedDate.getMonth(),1);renderCalendar();return;}
+    const deleteCalendarEvent=e.target.closest('[data-delete-calendar-event]');if(deleteCalendarEvent){const id=deleteCalendarEvent.dataset.deleteCalendarEvent;state.calendarEvents=state.calendarEvents.filter(event=>event.id!==id);saveState();renderCalendar();toast('Calendar event removed.');return;}
+    const ratingButton=e.target.closest('[data-daily-rating]');if(ratingButton&&calendarSelectedDate&&calendarSelectedDate<=localKey(new Date())){state.dailyRatings[calendarSelectedDate]={rating:ratingButton.dataset.dailyRating,updatedAt:Date.now()};saveState();renderCalendar();return;}
     if(e.target.closest('[data-clear-daily-rating]')&&calendarSelectedDate){delete state.dailyRatings[calendarSelectedDate];saveState();renderCalendar();return;}
     if(e.target.closest('[data-toggle-sessions]')){showAllSessions=!showAllSessions;render();return;}
     const deleteSessionButton=e.target.closest('[data-delete-session]');if(deleteSessionButton){deleteSession(Number(deleteSessionButton.dataset.deleteSession));return;}
@@ -793,6 +829,13 @@
     if(e.target.id==='session-form'){
       e.preventDefault();const form=new FormData(e.target);const hours=Number(form.get('hours'));if(!Number.isFinite(hours)||hours<=0||hours>24){toast('Enter study time between 0.1 and 24 hours.');return;}
       const course=form.get('course');state.sessions.push({id:`${Date.now()}-${Math.random().toString(36).slice(2,7)}`,course,date:form.get('date'),minutes:Math.round(hours*60),note:String(form.get('note')||'').trim(),createdAt:Date.now()});saveState();toast('Study time logged.');render();return;
+    }
+    if(e.target.id==='calendar-event-form'){
+      e.preventDefault();const form=new FormData(e.target),title=String(form.get('title')||'').trim().replace(/\s+/g,' '),date=String(form.get('date')||'');
+      if(!title){toast('Enter an event name.');return;}if(!isValidDateKey(date)){toast('Choose a valid event date.');return;}
+      const event=sanitizeCalendarEvents([{id:`event-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title,date,type:String(form.get('type')||'Other'),time:String(form.get('time')||''),note:String(form.get('note')||'').trim(),createdAt:Date.now()}])[0];
+      if(!event){toast('Could not add this event. Check its date and details.');return;}
+      state.calendarEvents.push(event);calendarSelectedDate=date;const selectedDate=dateFromKey(date);calendarMonth=new Date(selectedDate.getFullYear(),selectedDate.getMonth(),1);saveState();toast('Event added to your calendar.');renderCalendar();return;
     }
     if(e.target.id==='add-topic-form'){
       e.preventDefault();const input=document.getElementById('new-wheel-topic');if(addWheelTopic(input.value))input.value='';
@@ -830,5 +873,5 @@
   setAuthMode('signin');
   render();
   initializeCloudSession();
-  setInterval(()=>{const face=document.getElementById('timer-face');if(face&&state.timer)face.textContent=timerText();updateCountdownClocks();const today=localKey(new Date());if(today!==prepThemeDate){prepThemeDate=today;const sessionHistory=pruneSessionHistory(state.sessions);if(sessionHistory.removed){state.sessions=sessionHistory.sessions;saveState();if(activePage==='hours')renderHours();}const climate=updatePrepTheme();if(activePage==='overview')renderOverview(climate);}},1000);
+  setInterval(()=>{const face=document.getElementById('timer-face');if(face&&state.timer)face.textContent=timerText();updateCountdownClocks();const today=localKey(new Date());if(today!==prepThemeDate){prepThemeDate=today;const sessionHistory=pruneSessionHistory(state.sessions);if(sessionHistory.removed){state.sessions=sessionHistory.sessions;saveState();if(activePage==='hours')renderHours();}const climate=updatePrepTheme();if(activePage==='overview')renderOverview(climate);if(activePage==='calendar')renderCalendar();}},1000);
 })();
